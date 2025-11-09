@@ -53,6 +53,82 @@ class MessageRecord:
 
 
 @dataclass(slots=True)
+class ThresholdErrorRecord:
+    """Tracks error occurrences within a time window."""
+
+    occurrences: list[float] = field(default_factory=list)  # Timestamps of occurrences
+
+    def add_occurrence(self, timestamp: float) -> None:
+        """Add a new occurrence timestamp."""
+        self.occurrences.append(timestamp)
+
+    def count_in_window(self, now: float, window_seconds: float) -> int:
+        """Count occurrences within the specified time window."""
+        cutoff = now - window_seconds
+        # Remove old timestamps and count remaining
+        self.occurrences = [ts for ts in self.occurrences if ts >= cutoff]
+        return len(self.occurrences)
+
+
+@dataclass(slots=True)
+class ThresholdErrorHandler:
+    """Handles error suppression based on frequency threshold.
+
+    Only displays errors to terminal if they occur >= threshold times within time_window.
+    Otherwise, errors are only logged to file.
+    """
+
+    # Time window in seconds (default: 15 minutes)
+    time_window: float = 900.0
+
+    # Minimum occurrences within window to display to terminal
+    threshold: int = 5
+
+    # Internal storage for tracking error codes
+    _error_registry: dict[str, ThresholdErrorRecord] = field(default_factory=dict)
+
+    def should_display_error(
+        self,
+        error_code: str,
+    ) -> tuple[bool, int]:
+        """
+        Check if an error should be displayed to terminal based on frequency.
+
+        Args:
+            error_code: Error code to track (e.g., "2150")
+
+        Returns:
+            tuple[bool, int]: (should_display, count_in_window)
+        """
+        now = time.time()
+
+        # Get or create record for this error code
+        if error_code not in self._error_registry:
+            self._error_registry[error_code] = ThresholdErrorRecord()
+
+        record = self._error_registry[error_code]
+        record.add_occurrence(now)
+
+        # Count occurrences in the time window
+        count = record.count_in_window(now, self.time_window)
+
+        # Return whether to display and the count
+        return count >= self.threshold, count
+
+    def clear(self, error_code: str | None = None) -> None:
+        """
+        Clear tracking for a specific error code or all errors.
+
+        Args:
+            error_code: Error code to clear, or None to clear all
+        """
+        if error_code is not None and error_code in self._error_registry:
+            del self._error_registry[error_code]
+        elif error_code is None:
+            self._error_registry.clear()
+
+
+@dataclass(slots=True)
 class DuplicateMessageHandler:
     """Handles message deduplication over time intervals."""
 

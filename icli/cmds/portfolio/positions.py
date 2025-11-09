@@ -21,6 +21,7 @@ from icli.helpers import *
 
 if TYPE_CHECKING:
     pass
+import shutil
 import dateutil.parser
 import pandas as pd
 
@@ -172,12 +173,15 @@ class IOpPositions(IOp):
             # logger.info("contract is: {}", o.contract)
             if isinstance(o.contract, (Option, Warrant, FuturesOption)):
                 try:
-                    make["date"] = dateutil.parser.parse(
+                    # Keep date as string in YYYYMMDD format for later processing
+                    parsed_date = dateutil.parser.parse(
                         o.contract.lastTradeDateOrContractMonth
-                    ).date()
+                    )
+                    make["date"] = parsed_date.strftime('%Y%m%d')
                 except:
                     logger.error("Row didn't have a good date? {}", o)
-                    pass
+                    # If parsing fails, keep original string
+                    make["date"] = o.contract.lastTradeDateOrContractMonth or ""
 
                 make["strike"] = o.contract.strike
                 make["PC"] = o.contract.right
@@ -330,11 +334,129 @@ class IOpPositions(IOp):
             logger.info("No current positions found!")
             return None
 
-        desc = "All Positions"
-        if self.symbols:
-            desc += f" for {', '.join(self.symbols)}"
+        # Get terminal width for adaptive display
+        terminal_width = shutil.get_terminal_size((80, 40)).columns
+        logger.info(f"Terminal width detected: {terminal_width}")
 
-        printFrame(allPositions, desc)
+        # Calculate portfolio weight percentage for each position
+        if "Total" in allPositions.index and "marketValue" in allPositions.columns:
+            try:
+                # Convert to float, handling both numeric and string types
+                total_val = allPositions.loc["Total", "marketValue"]
+                if isinstance(total_val, str):
+                    # Remove commas and convert to float
+                    total_val = float(total_val.replace(',', ''))
+                total_value = abs(total_val)
+
+                if total_value > 0:
+                    # Calculate weight percentage for each position
+                    def calc_weight(x):
+                        try:
+                            if pd.isna(x) or x == "NaN":
+                                return 0.0
+                            if isinstance(x, str):
+                                # Remove commas from string values
+                                val = float(x.replace(',', ''))
+                            else:
+                                val = float(x)
+                            return round(abs(val) / total_value * 100, 2)
+                        except:
+                            return 0.0
+
+                    allPositions["w%"] = allPositions["marketValue"].apply(calc_weight)
+                    allPositions.loc["Total", "w%"] = 100.0
+                    # Ensure w% is numeric type
+                    allPositions["w%"] = pd.to_numeric(allPositions["w%"], errors='coerce').fillna(0.0)
+            except (ValueError, TypeError, Exception) as e:
+                # If conversion fails, skip weight calculation
+                logger.warning("Could not calculate portfolio weights: {}", e)
+                pass
+
+        # Create compact view - always use compact for better readability
+        if terminal_width <= 120:  # Use compact view for terminals up to 120 columns
+            # Select only essential columns for compact display
+            compact_cols = ["type", "sym", "position", "avgCost", "mktPrice", "mktValue", "PNL", "%", "w%"]
+
+            # Map to actual column names
+            col_mapping = {
+                "avgCost": "averageCost",
+                "mktPrice": "marketPrice",
+                "mktValue": "marketValue",
+                "PNL": "unrealizedPNL"
+            }
+
+            # Get available columns with proper names
+            available_cols = []
+            all_cols_list = list(allPositions.columns)  # Convert to list to avoid pandas type issues
+            for col in compact_cols:
+                actual_col = col_mapping.get(col, col)
+                if actual_col in all_cols_list:
+                    available_cols.append(actual_col)
+
+            # Create compact dataframe first
+            compact_df = allPositions[available_cols].copy()
+
+            # Now format option symbols in the copy
+            for idx in compact_df.index:
+                if idx != "Total":
+                    row = allPositions.loc[idx]
+                    if row["type"] in {"OPT", "FOP"} and pd.notna(row.get("strike")):
+                        # Format: SYMBOL EXPDATE STRIKE PC
+                        date_str = str(row.get("date", ""))
+
+                        # Extract MMDD from date string (now it's always a string in YYYYMMDD format)
+                        if len(date_str) >= 8:
+                            exp_date = f"{date_str[4:6]}{date_str[6:8]}"
+                        else:
+                            exp_date = ""
+
+                        strike_val = f"{row['strike']:.0f}" if pd.notna(row.get("strike")) else ""
+                        pc = row.get("PC", "")
+                        symbol = str(row["sym"])[:6]  # Limit base symbol to 6 chars
+
+                        # Create compact option symbol in compact_df
+                        compact_df.at[idx, "sym"] = f"{symbol} {exp_date} {strike_val}{pc}"
+
+            # Rename columns to shorter names
+            rename_map = {v: k for k, v in col_mapping.items()}
+            compact_df.rename(columns=rename_map, inplace=True)
+
+            # Format numbers for compact display - convert to numeric first to handle commas
+            if "avgCost" in compact_df.columns:
+                compact_df["avgCost"] = pd.to_numeric(compact_df["avgCost"].astype(str).str.replace(',', ''), errors='coerce').round(2)
+            if "mktPrice" in compact_df.columns:
+                compact_df["mktPrice"] = pd.to_numeric(compact_df["mktPrice"].astype(str).str.replace(',', ''), errors='coerce').round(2)
+            if "mktValue" in compact_df.columns:
+                compact_df["mktValue"] = pd.to_numeric(compact_df["mktValue"].astype(str).str.replace(',', ''), errors='coerce').round(0)
+            if "PNL" in compact_df.columns:
+                compact_df["PNL"] = pd.to_numeric(compact_df["PNL"].astype(str).str.replace(',', ''), errors='coerce').round(0)
+            if "w%" in compact_df.columns:
+                compact_df["w%"] = pd.to_numeric(compact_df["w%"], errors='coerce').fillna(0.0).round(2)
+
+            # Truncate symbol names to fit
+            if "sym" in compact_df.columns:
+                compact_df["sym"] = compact_df["sym"].astype(str).str[:15]
+
+            # Log full details for reference
+            logger.info("Compact view for terminal width: {}", terminal_width)
+
+            desc = f"Positions ({len(allPositions)-1})"
+            if self.symbols:
+                desc += f" for {', '.join(list(self.symbols)[:2])}"
+
+            printFrame(compact_df, desc)
+
+            if terminal_width <= 80:
+                print("[Tip: Some columns hidden. Check log for details]")
+        else:
+            # Wide terminal - show more details but still hide some columns
+            drop_cols = ["closeOrder", "closeOrderValue", "closeOrderProfit", "conId", "exch"]
+            display_df = allPositions.drop(columns=[col for col in drop_cols if col in allPositions.columns])
+
+            desc = "All Positions"
+            if self.symbols:
+                desc += f" for {', '.join(self.symbols)}"
+            printFrame(display_df, desc)
 
         # attempt to find spreads by locating options with the same symbol
         symbolCounts = df.pivot_table(index=["type", "sym", "date"], aggfunc="size")
@@ -356,7 +478,46 @@ class IOpPositions(IOp):
                 df.type.isin({"OPT", "FOP"}) & (df.sym == sym) & (df.date == date)
             ]
             spread = self.totalFrame(spread.copy(), costPrice=True)
-            printFrame(spread, f"[{sym}] Potential Spread Identified")
+
+            # Apply compact view to spread display too (if terminal is narrow)
+            logger.debug(f"Spread display - terminal_width: {terminal_width}")
+            if terminal_width <= 120:
+                # Create compact spread display
+                compact_spread_cols = ["type", "PC", "strike", "position", "averageCost", "marketPrice", "marketValue", "unrealizedPNL", "%", "w%"]
+                all_spread_cols = list(spread.columns)
+                available_spread_cols = [col for col in compact_spread_cols if col in all_spread_cols]
+                spread_display = spread[available_spread_cols].copy()
+
+                # Shorten column names
+                spread_display.rename(columns={
+                    "averageCost": "avgCost",
+                    "marketPrice": "mktPrice",
+                    "marketValue": "mktValue",
+                    "unrealizedPNL": "PNL"
+                }, inplace=True)
+
+                # Format numbers
+                if "avgCost" in spread_display.columns:
+                    spread_display["avgCost"] = pd.to_numeric(spread_display["avgCost"], errors='coerce').round(2)
+                if "mktPrice" in spread_display.columns:
+                    spread_display["mktPrice"] = pd.to_numeric(spread_display["mktPrice"], errors='coerce').round(2)
+                if "mktValue" in spread_display.columns:
+                    spread_display["mktValue"] = pd.to_numeric(spread_display["mktValue"], errors='coerce').round(0)
+                if "PNL" in spread_display.columns:
+                    spread_display["PNL"] = pd.to_numeric(spread_display["PNL"], errors='coerce').round(0)
+                if "w%" in spread_display.columns:
+                    spread_display["w%"] = pd.to_numeric(spread_display["w%"], errors='coerce').fillna(0.0).round(2)
+
+                # Format date from YYYYMMDD to MM/DD
+                date_str = str(date)
+                if len(date_str) >= 8:
+                    exp_display = f"{date_str[4:6]}/{date_str[6:8]}"
+                else:
+                    exp_display = date_str
+
+                printFrame(spread_display, f"[{sym} {exp_display}] Spread")
+            else:
+                printFrame(spread, f"[{sym}] Potential Spread Identified")
 
             matchingContracts = [
                 contract

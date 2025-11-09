@@ -1,4 +1,4 @@
-.env.icli
+# .env.icli
 
 runlogs/
 dist/
@@ -6,6 +6,9 @@ cache*/
 icli/hist/
 
 *.log
-*.json
+# *.json
 *.txt
 poetry.lock
+
+.DS_Store
+__pycache__/

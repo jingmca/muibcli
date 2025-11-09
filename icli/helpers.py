@@ -745,7 +745,7 @@ class ITicker:
         # init ATRs at our default allowances
         # (the .25 is because fully active quotes update in 250 ms intervals, so we normalize "events per second" by update frequency)
         # (ergo, this is a 90 second vs. 45 second ATR)
-        for lookback in (90, 120, 180, 300, 420, 600, 840, 900, 1260, 1800):
+        for lookback in (90, 120, 180, 300, 420, 600, 840, 900, 1260, 1800, 3600):
             self.atrs[lookback] = ATRLive(
                 int(lookback / 0.25), int(lookback / 2 / 0.25)
             )

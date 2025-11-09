@@ -462,7 +462,7 @@ def readableHTML(html) -> str:
     )
 
 
-stocks = ["QQQ", "SPY", "AAPL"]
+stocks = ["SPY"]  # Simplified default quote list for 80x40 terminals
 
 # Futures to exchange mappings:
 # https://www.interactivebrokers.com/en/index.php?f=26662
@@ -607,6 +607,12 @@ class IBKRCmdlineApp:
     #  of lines of exact duplicate warnings all at once)
     duplicateMessageHandler: utils.DuplicateMessageHandler = field(
         default_factory=utils.DuplicateMessageHandler
+    )
+
+    # threshold-based error suppression: only show errors to terminal if they occur >= N times in time window
+    # otherwise errors are only logged to file
+    thresholdErrorHandler: utils.ThresholdErrorHandler = field(
+        default_factory=utils.ThresholdErrorHandler
     )
 
     # in-progress: attempt in-process paper trading space for fake order tracking.
@@ -3104,10 +3110,8 @@ class IBKRCmdlineApp:
                 errorString,
             )
         else:
-            # Instead of printing these errors directly, we pass them through a deduplication
-            # filter because sometimes we get unlimited repeated error messages (which aren't
-            # actually errors) and we want to suppress them to only one repeated error update
-            # every 30 seconds instead of 1 error per second continuously.
+            # Use threshold-based error suppression: errors are only displayed to terminal
+            # if they occur >= 5 times within 15 minutes. Otherwise they are only logged.
             msg = "{} [code {}]: {}{}".format(
                 f"Order Error [orderId {reqId}]"
                 if (reqId > 0 and errorCode not in {321, 366})
@@ -3117,9 +3121,23 @@ class IBKRCmdlineApp:
                 f" for {contract}" if contract else "",
             )
 
-            self.duplicateMessageHandler.handle_message(
-                message=msg, log_func=logger.error
+            # Check if this error should be displayed to terminal
+            should_display, count = self.thresholdErrorHandler.should_display_error(
+                error_code=str(errorCode)
             )
+
+            if should_display:
+                # Display to terminal with occurrence count
+                logger.error(
+                    "{} (occurred {} times in last {} minutes)",
+                    msg,
+                    count,
+                    int(self.thresholdErrorHandler.time_window / 60),
+                )
+            else:
+                # Only log to file using logger.debug (won't display to terminal)
+                # We use bind to ensure it still goes to the log file
+                logger.bind(suppress_terminal=True).debug(msg)
 
     def cancelHandler(self, err):
         logger.warning("Order canceled: {}", err)
@@ -4183,8 +4201,8 @@ class IBKRCmdlineApp:
 
                 mark = round((bid + ask) / 2, decimals) if bid and ask else 0
 
-                e100 = round(c.ema[60], decimals)
-                e300 = round(c.ema[300], decimals)
+                e100 = round(c.ema[900], decimals)
+                e300 = round(c.ema[3_900], decimals)
 
                 # logger.info("[{}] Got EMA for OPT: {} -> {}", ls, e100, e300)
                 e100diff = (mark - e100) if e100 else 0
@@ -4450,8 +4468,6 @@ class IBKRCmdlineApp:
                             f"{trend}",
                             f"{fmtPriceOpt(e300):>6}",
                             f" {fmtPriceOpt(mark):>5} ±{fmtPriceOpt((ask or nan) - mark, decimals):<4}",
-                            f" ({pctBigHigh} {amtBigHigh} {fmtPriceOpt(high):>6})" if high else " (                       )",
-                            f"({pctBigLow} {amtBigLow} {fmtPriceOpt(low):>6})" if low else "(                       )",
                             f" {fmtPriceOpt(bid):>6} x {b_s}   {fmtPriceOpt(ask):>6} x {a_s}",
                             f"{amtBigVWAPColor}",
                             f" ({ago:>7})",
@@ -4618,9 +4634,6 @@ class IBKRCmdlineApp:
                             f"{trend}",
                             f"{fmtPriceOpt(e300):>6}",
                             f"{fmtPriceOpt(mark or (c.modelGreeks.optPrice if c.modelGreeks else 0)):>6} ±{fmtPriceOpt((ask or np.nan) - mark, decimals):<4}",
-                            f"({pctBigHigh} {amtBigHigh} {fmtPriceOpt(high):>6})" if high else "(                       )",
-                            f"({pctBigLow} {amtBigLow} {fmtPriceOpt(low):>6})" if low else "(                       )",
-                            f"({pctBigClose} {amtBigClose} {fmtPriceOpt(close):>6})" if close else "(                       )",
                             f" {fmtPriceOpt(bid or np.nan):>6} x {b_s}   {fmtPriceOpt(ask or np.nan):>6} x {a_s}",
                             f"{amtVWAPColor}",
                             f" ({ago:>7})",
@@ -4697,8 +4710,8 @@ class IBKRCmdlineApp:
             )
 
             # somewhat circuitous logic to format NaNs and values properly at the same string padding offsets
-            # Showing the 3 minute ATR by default. We have other ATRs to choose from. See per-symbol 'info' output for all live values.
-            atrval = c.atrs[180].atr.current
+            # Showing the 1 hour ATR by default. We have other ATRs to choose from. See per-symbol 'info' output for all live values.
+            atrval = c.atrs[3600].atr.current
 
             # if ATR > 100, omit cents so it fits in the narrow column easier
             if atrval > 100:
@@ -4707,8 +4720,8 @@ class IBKRCmdlineApp:
                 # else, we can print a full width value since it will fit in the 5 character width column
                 atr = f"{atrval:>5.2f}"
 
-            e100 = round(c.ema[60], decimals)
-            e300 = round(c.ema[300], decimals)
+            e100 = round(c.ema[900], decimals)
+            e300 = round(c.ema[3_900], decimals)
 
             # for price differences we show the difference as if holding a LONG position
             # at the historical price as compared against the current price.
@@ -4726,7 +4739,7 @@ class IBKRCmdlineApp:
                 e300diff = (usePrice - e300) if e300 else 0
             # logger.info("[{}] e100 e300: {} {} {} {}", ls, e100, e300, e100diff, e300diff)
 
-            # also add a marker for if the short term trend (1m) is GT, LT, or EQ to the longer term trend (3m)
+            # also add a marker for if the short term trend (15m) is GT, LT, or EQ to the longer term trend (65m)
             ediff = e100 - e300
             if ediff > 0:
                 trend = "&gt;"
@@ -4745,9 +4758,6 @@ class IBKRCmdlineApp:
                     f"{e300:>10,.{decimals}f}",
                     f"({e300diff:>6,.2f})" if e300diff else "(      )",
                     f"{usePrice:>10,.{decimals}f} ±{fmtEquitySpread(ask - usePrice, decimals) if (ask and ask >= usePrice) else '':<6}",
-                    f"({pctUndHigh} {amtUndHigh})",
-                    f"({pctUpLow} {amtUpLow})",
-                    f"({pctUpClose} {amtUpClose})",
                     f"{high or np.nan:>10,.{decimals}f}",
                     f"{low or np.nan:>10,.{decimals}f}",
                     f"<aaa bg='purple'>{c.bid or np.nan:>10,.{decimals}f} x {b_s} {ask or np.nan:>10,.{decimals}f} x {a_s}</aaa>",
@@ -5533,8 +5543,9 @@ class IBKRCmdlineApp:
                 contracts: list[Stock | Future | Index] = [
                     Stock(sym, "SMART", "USD") for sym in stocks
                 ]
-                contracts += futures
-                contracts += idxs
+                # Commented out to reduce default quotes for narrow terminals
+                # contracts += futures
+                # contracts += idxs
 
                 with Timer("[quotes :: global] Restored quote state"):
                     # run restore and local contracts qualification concurrently
@@ -5620,6 +5631,11 @@ class IBKRCmdlineApp:
                     )
 
                     self.connected = True
+
+                    # Display startup message
+                    print("\n✅ 已连接到IBKR！")
+                    print("💡 输入 'hh' 查看常用命令帮助")
+                    print("💡 输入 'man <命令>' 查看具体命令详细帮助\n")
 
                     self.ib.reqNewsBulletins(True)
 
