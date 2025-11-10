@@ -38,13 +38,14 @@ class IOpQuoteList(IOp):
             # if only specific groups requested, use them
             groups = sorted(self.groups)
         else:
-            # else, use all quote groups found
-            groups = sorted([k[1] for k in self.cache if k[0] == "quotes"])  # type: ignore
+            # else, use all quote groups found for this client
+            # After clientId isolation, keys are: ("quotes", "client-X", "group")
+            groups = sorted([k[2] for k in self.cache if len(k) == 3 and k[0] == "quotes" and k[1] == f"client-{self.state.clientId}"])  # type: ignore
 
         logger.info("Groups: {}", pp.pformat(groups))
 
         for group in groups:
-            found = self.cache.get(("quotes", group), [])  # type: ignore
+            found = self.cache.get(("quotes", f"client-{self.state.clientId}", group), [])  # type: ignore
 
             if isinstance(found, list):
                 found = sorted(found)

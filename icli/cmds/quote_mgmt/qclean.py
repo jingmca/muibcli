@@ -26,10 +26,10 @@ class IOpQuoteClean(IOp):
         return [DArg("group")]
 
     async def run(self):
-        cacheKey = ("quotes", self.group)
+        cacheKey = ("quotes", f"client-{self.state.clientId}", self.group)
         symbols = self.cache.get(cacheKey)  # type: ignore
         if not symbols:
-            logger.error("No quote group found for name: {}", self.group)
+            logger.error("[client-{}] No quote group found for name: {}", self.state.clientId, self.group)
             return
 
         # Find any expired option symbols and remove them

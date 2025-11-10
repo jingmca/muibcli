@@ -26,9 +26,9 @@ class IOpQuoteSave(IOp):
         return [DArg("group"), DArg("*symbols")]
 
     async def run(self):
-        cacheKey = ("quotes", self.group)
+        cacheKey = ("quotes", f"client-{self.state.clientId}", self.group)
         self.cache.set(cacheKey, set(self.symbols))  # type: ignore
-        logger.info("[{}] {}", self.group, self.symbols)
+        logger.info("[client-{}][{}] {}", self.state.clientId, self.group, self.symbols)
 
         repopulate = [f'"{x}"' for x in self.symbols]
         await self.runoplive(

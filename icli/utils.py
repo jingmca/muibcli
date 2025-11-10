@@ -82,7 +82,7 @@ class ThresholdErrorHandler:
     time_window: float = 900.0
 
     # Minimum occurrences within window to display to terminal
-    threshold: int = 5
+    threshold: int = 15
 
     # Internal storage for tracking error codes
     _error_registry: dict[str, ThresholdErrorRecord] = field(default_factory=dict)

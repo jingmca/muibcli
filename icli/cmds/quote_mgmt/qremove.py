@@ -30,13 +30,13 @@ class IOpQuoteRemove(IOp):
 
     async def run(self):
         nocache = False
-        cacheKey = ("quotes", self.group)
+        cacheKey = ("quotes", f"client-{self.state.clientId}", self.group)
         symbols = self.cache.get(cacheKey)  # type: ignore
         if not symbols:
             nocache = True
             symbols = self.state.quoteState
             logger.error(
-                "[{}] No quote group found so using live quote list...", self.group
+                "[client-{}][{}] No quote group found so using live quote list...", self.state.clientId, self.group
             )
 
         goodbye = set()

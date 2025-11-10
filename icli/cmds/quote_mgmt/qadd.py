@@ -26,11 +26,11 @@ class IOpQuoteAppend(IOp):
         return [DArg("group"), DArg("*symbols")]
 
     async def run(self):
-        cacheKey = ("quotes", self.group)
+        cacheKey = ("quotes", f"client-{self.state.clientId}", self.group)
         symbols = self.cache.get(cacheKey)  # type: ignore
         if not symbols:
             logger.error(
-                "[{}] No quote group found. Creating new quote group!", self.group
+                "[client-{}][{}] No quote group found. Creating new quote group!", self.state.clientId, self.group
             )
             symbols = set()
 

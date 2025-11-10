@@ -13,13 +13,20 @@ SESSION2="icli-monitor"
 WORK_DIR="$HOME/Downloads/muibcli"
 
 # Account configurations
-ACCOUNT1_NAME="100k"
-ACCOUNT1_PORT="4003"
-ACCOUNT1_ID="U17780976"
+ACCOUNT1_NAME="53"
+ACCOUNT1_PORT="4001"
+ACCOUNT1_ID="U8346053"  
+ACCOUNT1_CLIENT_ID="1"
 
-ACCOUNT2_NAME="50k"
-ACCOUNT2_PORT="4004"
-ACCOUNT2_ID="U17830616"
+ACCOUNT2_NAME="fut"
+ACCOUNT2_PORT="4002"
+ACCOUNT2_ID="U6808250"
+ACCOUNT2_CLIENT_ID="2"
+
+ACCOUNT3_NAME="768"
+ACCOUNT3_PORT="4003"
+ACCOUNT3_ID="U6810786"
+ACCOUNT3_CLIENT_ID="3"
 
 # ========== Cleanup existing sessions ==========
 echo "🧹 Cleaning up existing sessions..."
@@ -44,13 +51,19 @@ tmux send-keys -t $SESSION1:1 "cd $WORK_DIR && tail -f icli-*.log" C-m
 echo "   Creating Window 2: $ACCOUNT1_NAME"
 tmux new-window -t $SESSION1:2 -n $ACCOUNT1_NAME
 tmux send-keys -t $SESSION1:$ACCOUNT1_NAME "cd $WORK_DIR" C-m
-tmux send-keys -t $SESSION1:$ACCOUNT1_NAME "ICLI_IBKR_PORT=$ACCOUNT1_PORT ICLI_IBKR_ACCOUNT_ID=$ACCOUNT1_ID poetry run icli" C-m
+tmux send-keys -t $SESSION1:$ACCOUNT1_NAME "ICLI_CLIENT_ID=$ACCOUNT1_CLIENT_ID ICLI_IBKR_PORT=$ACCOUNT1_PORT ICLI_IBKR_ACCOUNT_ID=$ACCOUNT1_ID poetry run icli" C-m
 
 # Window 2: account2
 echo "   Creating Window 3: $ACCOUNT2_NAME"
 tmux new-window -t $SESSION1:3 -n $ACCOUNT2_NAME
 tmux send-keys -t $SESSION1:$ACCOUNT2_NAME "cd $WORK_DIR" C-m
-tmux send-keys -t $SESSION1:$ACCOUNT2_NAME "ICLI_IBKR_PORT=$ACCOUNT2_PORT ICLI_IBKR_ACCOUNT_ID=$ACCOUNT2_ID poetry run icli" C-m
+tmux send-keys -t $SESSION1:$ACCOUNT2_NAME "ICLI_CLIENT_ID=$ACCOUNT2_CLIENT_ID ICLI_IBKR_PORT=$ACCOUNT2_PORT ICLI_IBKR_ACCOUNT_ID=$ACCOUNT2_ID poetry run icli" C-m
+
+# Window 3: account3
+echo "   Creating Window 4: $ACCOUNT3_NAME"
+tmux new-window -t $SESSION1:4 -n $ACCOUNT3_NAME
+tmux send-keys -t $SESSION1:$ACCOUNT3_NAME "cd $WORK_DIR" C-m
+tmux send-keys -t $SESSION1:$ACCOUNT3_NAME "ICLI_CLIENT_ID=$ACCOUNT3_CLIENT_ID ICLI_IBKR_PORT=$ACCOUNT3_PORT ICLI_IBKR_ACCOUNT_ID=$ACCOUNT3_ID poetry run icli" C-m
 
 # Wait for ICLI to start
 echo ""
@@ -58,43 +71,43 @@ echo "⏳ Waiting 3 seconds for ICLI instances to start..."
 sleep 3
 
 # ========== Session 2: Monitor Session ==========
-echo ""
-echo "🖥️  Creating Session 2: $SESSION2"
-echo "   This session provides a split-pane view of all accounts"
-echo ""
+# echo ""
+# echo "🖥️  Creating Session 2: $SESSION2"
+# echo "   This session provides a split-pane view of all accounts"
+# echo ""
 
-# Create monitor session with one window
-echo "   Creating monitor window with split panes"
-tmux new-session -d -s $SESSION2 -n monitor
+# # Create monitor session with one window
+# echo "   Creating monitor window with split panes"
+# tmux new-session -d -s $SESSION2 -n monitor
 
-# Split horizontally into 2 panes
-tmux split-window -t $SESSION2:monitor -h
+# # Split horizontally into 2 panes
+# tmux split-window -t $SESSION2:monitor -h
 
-# Use even-horizontal layout (equal width panes)
-tmux select-layout -t $SESSION2:monitor even-horizontal
+# # Use even-horizontal layout (equal width panes)
+# tmux select-layout -t $SESSION2:monitor even-horizontal
 
-# Create independent grouped sessions for each pane
-# These sessions share the same windows but have independent active window selection
-echo "   Creating grouped session for $ACCOUNT1_NAME"
-tmux new-session -d -t $SESSION1 -s view-$ACCOUNT1_NAME
-tmux send-keys -t view-$ACCOUNT1_NAME ":" C-m
-tmux send-keys -t view-$ACCOUNT1_NAME "selectw -t $ACCOUNT1_NAME" C-m
+# # Create independent grouped sessions for each pane
+# # These sessions share the same windows but have independent active window selection
+# echo "   Creating grouped session for $ACCOUNT1_NAME"
+# tmux new-session -d -t $SESSION1 -s view-$ACCOUNT1_NAME
+# tmux send-keys -t view-$ACCOUNT1_NAME ":" C-m
+# tmux send-keys -t view-$ACCOUNT1_NAME "selectw -t $ACCOUNT1_NAME" C-m
 
-echo "   Creating grouped session for $ACCOUNT2_NAME"
-tmux new-session -d -t $SESSION1 -s view-$ACCOUNT2_NAME
-tmux send-keys -t view-$ACCOUNT2_NAME ":" C-m
-tmux send-keys -t view-$ACCOUNT2_NAME "selectw -t $ACCOUNT2_NAME" C-m
+# echo "   Creating grouped session for $ACCOUNT2_NAME"
+# tmux new-session -d -t $SESSION1 -s view-$ACCOUNT2_NAME
+# tmux send-keys -t view-$ACCOUNT2_NAME ":" C-m
+# tmux send-keys -t view-$ACCOUNT2_NAME "selectw -t $ACCOUNT2_NAME" C-m
 
-# Wait for grouped sessions to be created
-sleep 1
+# # Wait for grouped sessions to be created
+# sleep 1
 
-# Pane 1: attach to the grouped session for account1
-echo "   Linking pane 1 → view-$ACCOUNT1_NAME"
-tmux send-keys -t $SESSION2:monitor.1 "unset TMUX && tmux attach-session -t view-$ACCOUNT1_NAME" C-m
+# # Pane 1: attach to the grouped session for account1
+# echo "   Linking pane 1 → view-$ACCOUNT1_NAME"
+# tmux send-keys -t $SESSION2:monitor.1 "unset TMUX && tmux attach-session -t view-$ACCOUNT1_NAME" C-m
 
-# Pane 2: attach to the grouped session for account2
-echo "   Linking pane 2 → view-$ACCOUNT2_NAME"
-tmux send-keys -t $SESSION2:monitor.2 "unset TMUX && tmux attach-session -t view-$ACCOUNT2_NAME" C-m
+# # Pane 2: attach to the grouped session for account2
+# echo "   Linking pane 2 → view-$ACCOUNT2_NAME"
+# tmux send-keys -t $SESSION2:monitor.2 "unset TMUX && tmux attach-session -t view-$ACCOUNT2_NAME" C-m
 
 # ========== Success Message ==========
 echo ""
