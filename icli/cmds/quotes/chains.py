@@ -29,9 +29,18 @@ import whenever
 @command(names=["chains"])
 @dataclass
 class IOpOptionChain(IOp):
-    """Print option chains for symbol"""
+    """Print option chains for symbol with optional price range filter.
+
+    Usage:
+        chains SPY                    # All strikes
+        chains SPY 600 650           # Only strikes between $600-$650
+        chains SPY REFRESH           # Force refresh cache
+        chains SPY 600 650 REFRESH   # With price range and refresh
+    """
 
     symbols: list[str] = field(init=False)
+    minPrice: float | None = field(init=False, default=None)
+    maxPrice: float | None = field(init=False, default=None)
 
     def argmap(self):
         return [
@@ -41,16 +50,46 @@ class IOpOptionChain(IOp):
             )
         ]
 
+    def parseArgs(self):
+        """Parse symbols and extract price range if provided."""
+        filtered_symbols = []
+        prices = []
+
+        for s in self.symbols:
+            # Check if it's a number (price)
+            try:
+                price = float(s)
+                prices.append(price)
+            except ValueError:
+                # Not a number, it's a symbol or keyword
+                filtered_symbols.append(s)
+
+        # Update symbols to only contain actual symbols
+        self.symbols = filtered_symbols
+
+        # Set price range if provided
+        if len(prices) >= 2:
+            self.minPrice = min(prices[0], prices[1])
+            self.maxPrice = max(prices[0], prices[1])
+        elif len(prices) == 1:
+            # If only one price, use it as center ±20%
+            center = prices[0]
+            self.minPrice = center * 0.8
+            self.maxPrice = center * 1.2
+
     async def run(self):
+        # Parse arguments to extract price range and symbols
+        self.parseArgs()
+
         # Index cache by symbol AND current date because strikes can change
         # every day even for the same expiration if there's high volatility.
         got = {}
 
         symbol: str | None
         self.symbols: list[str]
-        IS_PREVIEW = self.symbols[-1] == "PREVIEW"
+        IS_PREVIEW = len(self.symbols) > 0 and self.symbols[-1] == "PREVIEW"
         IS_REFRESH = False
-        if self.symbols[-1] == "REFRESH":
+        if len(self.symbols) > 0 and self.symbols[-1] == "REFRESH":
             IS_REFRESH = True
             # remove "REFRESH" from symbols so we don't try to look it up
             self.symbols = self.symbols[:-1]
@@ -75,15 +114,16 @@ class IOpOptionChain(IOp):
             # if found in cache, don't lookup again!
             if not IS_REFRESH:
                 if (found := self.cache.get(cacheKey)) and all(list(found.items())):
-                    # don't print cached chains by default because this pollutes `Fast` output,
-                    # but if the last symbol is "preview" then do show it...
-                    if IS_PREVIEW:
+                    got[symbol] = found
+                    # Display cached chains (unless in PREVIEW mode for Fast command)
+                    if not IS_PREVIEW:
+                        await self.displayChains(symbol, found)
+                    else:
                         logger.info(
                             "[{}] Already cached: {}",
                             symbol,
                             pp.pformat(found.items()),
                         )
-                    got[symbol] = found
                     continue
 
             # resolve for option chains lookup
@@ -201,12 +241,93 @@ class IOpOptionChain(IOp):
                     self.cache.set(cacheKey, strikes, expire=expireSeconds)  # type: ignore
 
                 got[symbol] = strikes
+
+                # Format and display the strikes in horizontal format
+                await self.displayChains(symbol, strikes)
             except:
                 logger.exception(
                     "[{}] Error while fetching contract details...",
                     symbol,
                 )
 
-            logger.info("Strikes: {}", pp.pformat(got))
-
         return got
+
+    async def displayChains(self, symbol: str, strikes: dict):
+        """Display option chains in compact horizontal format with ATM symbols."""
+        # Get current price for ATM calculation
+        try:
+            # Add quote if not already subscribed
+            await self.runoplive("add", symbol)
+
+            # Wait briefly for quote to populate
+            for _ in range(5):
+                if symbol in self.state.quoteState:
+                    quote = self.state.quoteState[symbol]
+                    if quote.last == quote.last:  # Check not NaN
+                        break
+                await asyncio.sleep(0.1)
+
+            currentPrice = None
+            if symbol in self.state.quoteState:
+                quote = self.state.quoteState[symbol]
+                # Try last, then close as fallback
+                currentPrice = quote.last if quote.last == quote.last else quote.close
+        except:
+            currentPrice = None
+
+        logger.info("\n" + "=" * 80)
+        logger.info(f"[{symbol}] Option Chains" + (f" (Current: ${currentPrice:,.2f})" if currentPrice else ""))
+
+        if self.minPrice or self.maxPrice:
+            logger.info(f"Price Range: ${self.minPrice or 0:,.2f} - ${self.maxPrice or 999999:,.2f}")
+
+        logger.info("=" * 80)
+
+        # Sort dates
+        sorted_dates = sorted(strikes.keys())
+
+        for date in sorted_dates:
+            strike_list = strikes[date]
+
+            # Filter by price range if specified
+            if self.minPrice or self.maxPrice:
+                strike_list = [
+                    s for s in strike_list
+                    if (not self.minPrice or s >= self.minPrice) and
+                       (not self.maxPrice or s <= self.maxPrice)
+                ]
+
+            if not strike_list:
+                continue
+
+            # Find ATM strike (closest to current price)
+            atm_strike = None
+            atm_call = None
+            atm_put = None
+
+            if currentPrice and currentPrice == currentPrice:  # Check not NaN
+                atm_strike = min(strike_list, key=lambda s: abs(s - currentPrice))
+                # Format OCC symbols for ATM options
+                # Date format: YYMMDD from full date YYYYMMDD
+                date_str = date[2:]  # Remove first 2 digits (20XX -> XX)
+                atm_call = f"{symbol}{date_str}C{int(atm_strike * 1000):08d}"
+                atm_put = f"{symbol}{date_str}P{int(atm_strike * 1000):08d}"
+
+            # Format date nicely
+            try:
+                date_obj = dateutil.parser.parse(date)
+                date_display = date_obj.strftime("%Y-%m-%d")
+            except:
+                date_display = date
+
+            # Display in horizontal format
+            strike_str = ", ".join([f"{s:.2f}" for s in sorted(strike_list)[:20]])  # Limit to first 20
+            if len(strike_list) > 20:
+                strike_str += f" ... (+{len(strike_list) - 20} more)"
+
+            logger.info(f"\n[{date_display}] {len(strike_list)} strikes: {strike_str}")
+
+            if atm_call and atm_put:
+                logger.info(f"  ATM ${atm_strike:.2f}: Call={atm_call}  Put={atm_put}")
+
+        logger.info("=" * 80 + "\n")

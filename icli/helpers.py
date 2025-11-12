@@ -167,7 +167,15 @@ type ContractId = int
 
 def fmtmoney(val: float | int | Decimal):
     """Return a formatted money string _with_ a comma in them for thousands separator."""
-    return locale.currency(val, grouping=True)
+    try:
+        return locale.currency(val, grouping=True)
+    except (ValueError, locale.Error):
+        # Fallback for systems with 'C' locale or missing locale settings
+        # Manually format as USD with comma separators
+        if val < 0:
+            return f"-${abs(val):,.2f}"
+        else:
+            return f"${val:,.2f}"
 
 
 @dataclass(slots=True)
