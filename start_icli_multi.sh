@@ -35,10 +35,12 @@ load_accounts() {
     fi
 
     # Arrays to store account info
-    declare -g -a ACCOUNT_NAMES=()
-    declare -g -a ACCOUNT_PORTS=()
-    declare -g -a ACCOUNT_IDS=()
-    declare -g -a ACCOUNT_CLIENT_IDS=()
+    # Note: Using simple array declaration for bash 3.2 compatibility
+    # (bash 3.2 doesn't support -g flag, but arrays are global by default)
+    ACCOUNT_NAMES=()
+    ACCOUNT_PORTS=()
+    ACCOUNT_IDS=()
+    ACCOUNT_CLIENT_IDS=()
 
     echo "📖 Reading config from: $CONFIG_FILE"
     echo ""

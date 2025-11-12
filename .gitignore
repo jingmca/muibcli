@@ -2,7 +2,8 @@
 
 runlogs/
 dist/
-# cache*/dsa 
+cache*/
+positions-*/
 icli/hist/
 
 *.log
@@ -12,3 +13,6 @@ poetry.lock
 
 .DS_Store
 __pycache__/
+
+# Account configuration files (sensitive)
+icli_accounts.conf
