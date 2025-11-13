@@ -373,10 +373,24 @@ class IOpPositions(IOp):
                 logger.warning("Could not calculate portfolio weights: {}", e)
                 pass
 
-        # Create compact view - always use compact for better readability
-        if terminal_width <= 120:  # Use compact view for terminals up to 120 columns
-            # Select only essential columns for compact display
-            compact_cols = ["type", "sym", "position", "avgCost", "mktPrice", "mktValue", "PNL", "%", "w%"]
+        # Determine if we should use preset-based display or full display
+        # Priority: explicit preset > terminal width auto-detection
+        use_preset_display = (
+            display_config.position_preset != "full" and
+            display_config.position_preset != "auto"
+        ) or terminal_width <= 120
+
+        # Create compact/preset view
+        if use_preset_display:
+            # Get columns from display_config
+            preset_cols = display_config.get_position_columns()
+
+            if preset_cols is None:
+                # Full mode or auto with wide terminal - use default compact
+                compact_cols = ["type", "sym", "position", "avgCost", "mktPrice", "mktValue", "PNL", "%", "w%"]
+            else:
+                # Use preset columns, but ensure we include type for option detection
+                compact_cols = ["type"] + preset_cols if "type" not in preset_cols else preset_cols
 
             # Map to actual column names
             col_mapping = {
