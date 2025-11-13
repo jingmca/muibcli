@@ -4491,6 +4491,16 @@ class IBKRCmdlineApp:
                         expiration = fparts[1][1:]
                         rowBody = f"{tradingClass} {month} {expiration} {c.contract.right} {c.contract.lastTradeDateOrContractMonth[2:]} {strike}"
                         rowName = f"{rowBody:<21}:"
+                    elif isinstance(c.contract, Option):
+                        # Use OCC format for regular options (AAPL240816C00220000)
+                        occ_symbol = format_option_symbol(
+                            c.contract.symbol,
+                            c.contract.lastTradeDateOrContractMonth,
+                            c.contract.strike,
+                            c.contract.right,
+                            "occ"
+                        )
+                        rowName = f"{occ_symbol:<21}:"
                     else:
                         rowName = f"{c.contract.localSymbol:<21}:"
 

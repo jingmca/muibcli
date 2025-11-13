@@ -197,6 +197,23 @@ if __name__ == "__main__":
         print("=" * 60)
         print()
 
+        # Show recommended OCC format for positions and quotes
+        print("=" * 60)
+        print("📋 OCC Format (Recommended for Positions & Quotes)")
+        print("=" * 60)
+        print("\nStandard format: SYMBOL + YYMMDD + C/P + STRIKE(8 digits)")
+        print("\nExamples:")
+        occ_examples = [
+            ("AAPL", "20240816", 220.0, "C", "Stock call"),
+            ("SPY", "20241220", 450.0, "P", "ETF put"),
+            ("TSLA", "20250117", 250.5, "P", "Fractional strike"),
+            ("/ES", "20240913", 5500.0, "C", "Future option"),
+        ]
+        for symbol, date, strike, pc, desc in occ_examples:
+            result = format_option_symbol(symbol, date, strike, pc, "occ")
+            print(f"  {desc:20s}: {result}")
+        print()
+
     except AssertionError as e:
         print(f"\n❌ Test failed: {e}")
         sys.exit(1)

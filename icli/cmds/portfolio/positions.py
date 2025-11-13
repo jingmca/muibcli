@@ -397,15 +397,9 @@ class IOpPositions(IOp):
             # Create compact dataframe first
             compact_df = allPositions[available_cols].copy()
 
-            # Format option symbols using new format_option_symbol() function
-            # Determine format mode based on display preset
-            if display_config.position_preset == "minimal":
-                option_mode = "minimal"
-            elif display_config.position_preset in ["compact", "trading"]:
-                option_mode = "compact"
-            else:
-                option_mode = "compact"  # Default
-
+            # Format option symbols using OCC standard format
+            # For compact/minimal/trading modes: use OCC format (AAPL240816C00220000)
+            # For full mode: keep separate columns (handled separately, not in compact_df)
             for idx in compact_df.index:
                 if idx != "Total":
                     row = allPositions.loc[idx]
@@ -415,9 +409,9 @@ class IOpPositions(IOp):
                         pc = row.get("PC", "")
                         symbol = str(row["sym"])
 
-                        # Use new format_option_symbol() function
+                        # Use OCC format for all non-full modes
                         compact_df.at[idx, "sym"] = format_option_symbol(
-                            symbol, date_str, strike, pc, option_mode
+                            symbol, date_str, strike, pc, "occ"
                         )
 
             # Rename columns to shorter names
