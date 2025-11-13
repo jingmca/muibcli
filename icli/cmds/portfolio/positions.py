@@ -389,8 +389,9 @@ class IOpPositions(IOp):
                 # Full mode or auto with wide terminal - use default compact
                 compact_cols = ["type", "sym", "position", "avgCost", "mktPrice", "mktValue", "PNL", "%", "w%"]
             else:
-                # Use preset columns, but ensure we include type for option detection
-                compact_cols = ["type"] + preset_cols if "type" not in preset_cols else preset_cols
+                # Use preset columns exactly as specified (don't add type)
+                # We'll use allPositions to detect options, not compact_df
+                compact_cols = preset_cols
 
             # Map to actual column names
             col_mapping = {
