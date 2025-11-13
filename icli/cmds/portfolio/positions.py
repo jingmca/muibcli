@@ -325,7 +325,28 @@ class IOpPositions(IOp):
             ],
         )
 
-        df.sort_values(by=["date", "sym", "PC", "strike"], ascending=True, inplace=True)
+        # Sort positions: group by underlying symbol, with stocks before options
+        # Order: sym (symbol) -> type (STK before OPT/FOP) -> date (expiry) -> PC -> strike
+
+        # Create a type order column: STK=0, OPT/FOP=1, others=2
+        df['type_order'] = df['type'].map({
+            'STK': 0,
+            'OPT': 1,
+            'FOP': 1,
+            'FUT': 2,
+        }).fillna(3)
+
+        # Sort by: symbol, type_order, date, PC, strike
+        # type_order ensures stocks (type_order=0) come before options (type_order=1)
+        # within same symbol, even though stock dates are NaN
+        df.sort_values(
+            by=["sym", "type_order", "date", "PC", "strike"],
+            ascending=[True, True, True, True, True],
+            inplace=True
+        )
+
+        # Drop the temporary sort helper column
+        df.drop(columns=['type_order'], inplace=True)
 
         # re-number DF according to the new sort order
         df.reset_index(drop=True, inplace=True)
@@ -544,25 +565,88 @@ class IOpPositions(IOp):
 
                 printFrame(spread_display, f"[{sym} {exp_display}] Spread")
             else:
-                # Wide terminal spread display - also format option symbols to OCC
-                spread_occ = spread.copy()
+                # Wide terminal spread display - apply same preset logic as main positions
+                if use_preset_display:
+                    # Use preset columns for spread display too
+                    preset_cols = display_config.get_position_columns()
 
-                # Format option symbols to OCC format
-                for idx in spread_occ.index:
-                    if idx != "Total":
-                        row = spread.loc[idx]
-                        if row["type"] in {"OPT", "FOP"} and pd.notna(row.get("strike")):
-                            date_str = str(row.get("date", ""))
-                            strike = row.get("strike", 0)
-                            pc = row.get("PC", "")
-                            symbol = str(row["sym"])
+                    if preset_cols is None:
+                        # Full mode - show all columns
+                        spread_cols = ["type", "PC", "strike", "position", "averageCost", "marketPrice", "marketValue", "unrealizedPNL", "%", "w%"]
+                    else:
+                        # Use preset columns, ensure we include PC and strike for spread context
+                        spread_cols = ["type", "PC", "strike"] + [c for c in preset_cols if c not in ["type", "PC", "strike"]]
 
-                            # Use OCC format for spread display too
-                            spread_occ.at[idx, "sym"] = format_option_symbol(
-                                symbol, date_str, strike, pc, "occ"
-                            )
+                    # Map column aliases
+                    col_mapping = {
+                        "avgCost": "averageCost",
+                        "mktPrice": "marketPrice",
+                        "mktValue": "marketValue",
+                        "PNL": "unrealizedPNL"
+                    }
 
-                printFrame(spread_occ, f"[{sym}] Potential Spread Identified")
+                    # Get available columns
+                    all_spread_cols = list(spread.columns)
+                    available_spread_cols = []
+                    for col in spread_cols:
+                        actual_col = col_mapping.get(col, col)
+                        if actual_col in all_spread_cols:
+                            available_spread_cols.append(actual_col)
+
+                    spread_display = spread[available_spread_cols].copy()
+
+                    # Format option symbols to OCC
+                    for idx in spread_display.index:
+                        if idx != "Total":
+                            row = spread.loc[idx]
+                            if row["type"] in {"OPT", "FOP"} and pd.notna(row.get("strike")):
+                                date_str = str(row.get("date", ""))
+                                strike = row.get("strike", 0)
+                                pc = row.get("PC", "")
+                                symbol = str(row["sym"])
+
+                                # Use OCC format for spread display
+                                spread_display.at[idx, "sym"] = format_option_symbol(
+                                    symbol, date_str, strike, pc, "occ"
+                                )
+
+                    # Rename columns to shorter names
+                    rename_map = {v: k for k, v in col_mapping.items()}
+                    spread_display.rename(columns=rename_map, inplace=True)
+
+                    # Format numbers
+                    if "avgCost" in spread_display.columns:
+                        spread_display["avgCost"] = pd.to_numeric(spread_display["avgCost"], errors='coerce').round(2)
+                    if "mktPrice" in spread_display.columns:
+                        spread_display["mktPrice"] = pd.to_numeric(spread_display["mktPrice"], errors='coerce').round(2)
+                    if "mktValue" in spread_display.columns:
+                        spread_display["mktValue"] = pd.to_numeric(spread_display["mktValue"], errors='coerce').round(0)
+                    if "PNL" in spread_display.columns:
+                        spread_display["PNL"] = pd.to_numeric(spread_display["PNL"], errors='coerce').round(0)
+                    if "w%" in spread_display.columns:
+                        spread_display["w%"] = pd.to_numeric(spread_display["w%"], errors='coerce').fillna(0.0).round(2)
+
+                    printFrame(spread_display, f"[{sym}] Potential Spread Identified")
+                else:
+                    # Full mode - format OCC and show all columns
+                    spread_occ = spread.copy()
+
+                    # Format option symbols to OCC format
+                    for idx in spread_occ.index:
+                        if idx != "Total":
+                            row = spread.loc[idx]
+                            if row["type"] in {"OPT", "FOP"} and pd.notna(row.get("strike")):
+                                date_str = str(row.get("date", ""))
+                                strike = row.get("strike", 0)
+                                pc = row.get("PC", "")
+                                symbol = str(row["sym"])
+
+                                # Use OCC format for spread display too
+                                spread_occ.at[idx, "sym"] = format_option_symbol(
+                                    symbol, date_str, strike, pc, "occ"
+                                )
+
+                    printFrame(spread_occ, f"[{sym}] Potential Spread Identified")
 
             matchingContracts = [
                 contract
