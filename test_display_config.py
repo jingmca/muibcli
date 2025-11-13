@@ -19,18 +19,20 @@ def test_presets():
     print("✅ Testing presets...")
     print("=" * 60)
 
-    # Test minimal preset
+    # Test minimal preset (updated to match new POSITION_PRESETS)
     cols = display_config.get_position_columns(override_preset="minimal")
-    assert cols == ["sym", "position", "unrealizedPNL", "%"], f"Expected minimal preset, got {cols}"
+    expected_minimal = ["sym", "position", "averageCost", "marketPrice", "unrealizedPNL", "%"]
+    assert cols == expected_minimal, f"Expected {expected_minimal}, got {cols}"
     print(f"✓ minimal: {cols}")
 
-    # Test compact preset
+    # Test compact preset (updated: removed 'type' column, now 8 columns)
     cols = display_config.get_position_columns(override_preset="compact")
-    assert len(cols) == 9, f"Expected 9 columns in compact, got {len(cols)}"
+    assert len(cols) == 8, f"Expected 8 columns in compact, got {len(cols)}"
     print(f"✓ compact: {cols}")
 
-    # Test trading preset
+    # Test trading preset (updated: 9 columns)
     cols = display_config.get_position_columns(override_preset="trading")
+    assert len(cols) == 9, f"Expected 9 columns in trading, got {len(cols)}"
     print(f"✓ trading: {cols}")
 
     # Test full preset
@@ -175,14 +177,14 @@ def test_priority_order():
     display_config.position_preset = "compact"
     display_config.position_columns = None
 
-    # Test: config only
+    # Test: config only (updated: compact is 8 columns now)
     cols = display_config.get_position_columns()
-    assert len(cols) == 9, "Should use config preset"
+    assert len(cols) == 8, "Should use config preset"
     print(f"✓ Config only (compact): {len(cols)} columns")
 
     # Test: override_preset beats config
     cols = display_config.get_position_columns(override_preset="minimal")
-    assert len(cols) == 4, "Override preset should beat config"
+    assert len(cols) == 6, "Override preset should beat config"
     print(f"✓ Override preset (minimal): {len(cols)} columns")
 
     # Test: override_columns beats everything

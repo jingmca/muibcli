@@ -13,11 +13,10 @@ from typing import Literal
 # ========== Position Display Presets ==========
 
 POSITION_PRESETS = {
-    "minimal": ["sym", "position", "PNL", "%"],
-    "compact": ["type", "sym", "position", "avgCost", "mktPrice", "mktValue", "PNL", "%", "w%"],
-    "trading": ["type", "sym", "position", "avgCost", "mktPrice", "closeOrder", "PNL", "%", "w%"],
+    "minimal": ["sym", "position", "avgCost", "mktPrice", "PNL", "%"],
+    "compact": ["sym", "position", "avgCost", "mktPrice", "mktValue", "PNL", "%", "w%"],
+    "trading": ["sym", "position", "avgCost", "mktPrice", "closeOrder", "PNL", "dailyPNL", "%", "w%"],
     "analysis": ["sym", "position", "marketValue", "totalCost", "unrealizedPNL", "dailyPNL", "%", "w%"],
-    "spread": ["type", "PC", "strike", "position", "avgCost", "mktPrice", "marketValue", "PNL", "%"],
     "full": None,  # None means show all columns
 }
 
@@ -46,11 +45,15 @@ POSITION_COLUMN_ALIASES = {
 
 # ========== Quote Display Presets ==========
 
+# Note: Quote display is currently generated as a formatted string in cli.py formatTicker()
+# These presets are placeholders for future refactoring when quote fields become configurable
 QUOTE_PRESETS = {
-    "minimal": ["sym", "last", "change", "%"],
-    "compact": ["sym", "last", "bid", "ask", "change", "%", "volume"],
-    "trading": ["sym", "bid", "ask", "last", "bidSize", "askSize", "volume", "change", "%"],
-    "options": ["sym", "last", "bid", "ask", "IV", "delta", "gamma", "theta", "vega", "%"],
+    "minimal": ["sym", "last", "bid", "ask", "change", "%"],
+    "compact": ["sym", "last", "bid", "ask", "bidSize", "askSize", "change", "%", "volume"],
+    "trading": ["sym", "ema100", "trend", "last", "spread", "bid", "ask", "bidSize", "askSize", "atr", "%"],
+    "scalping": ["sym", "ema100", "last", "spread", "bid", "ask", "bidSize", "askSize", "atr", "%"],
+    "analysis": ["sym", "ema100", "ema100diff", "trend", "ema300", "last", "high", "low", "vwap", "vwapDiff", "atr", "%", "volume"],
+    "options": ["sym", "underlying", "itm", "iv", "delta", "mark", "bid", "ask", "spread", "dte"],
     "full": None,
 }
 

@@ -1,4 +1,4 @@
-"""Command: set, config
+"""Command: display, cols
 
 Category: Utilities
 
@@ -23,17 +23,17 @@ if TYPE_CHECKING:
     pass
 
 
-@command(names=["set", "config"])
+@command(names=["display", "cols"])
 @dataclass
-class IOpSet(IOp):
+class IOpDisplay(IOp):
     """Configure display settings.
 
     Usage:
-        set                                  # Show all current settings
-        set positions.preset compact         # Set position preset
-        set positions.columns type,sym,PNL   # Set custom columns
-        set positions.autowidth true         # Enable auto-width detection
-        set quotes.preset trading            # Set quote preset
+        display                                  # Show all current settings
+        display positions.preset compact         # Set position preset
+        display positions.columns type,sym,PNL   # Set custom columns
+        display positions.autowidth true         # Enable auto-width detection
+        display quotes.preset trading            # Set quote preset
 
     Available position presets:
         minimal, compact, trading, analysis, spread, full, auto
@@ -84,11 +84,11 @@ class IOpSet(IOp):
         logger.info("   Positions: {}", ", ".join(get_available_presets("position").keys()))
         logger.info("   Quotes:    {}", ", ".join(get_available_presets("quote").keys()))
         logger.info("")
-        logger.info("💡 Usage: set <key> <value>")
+        logger.info("💡 Usage: display <key> <value>")
         logger.info("   Examples:")
-        logger.info("     set positions.preset compact")
-        logger.info("     set positions.columns type,sym,position,PNL,%")
-        logger.info("     set quotes.preset trading")
+        logger.info("     display positions.preset compact")
+        logger.info("     display positions.columns type,sym,position,PNL,%")
+        logger.info("     display quotes.preset trading")
 
     def show_setting(self, key: str):
         """Show a specific setting."""
