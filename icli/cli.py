@@ -4824,27 +4824,76 @@ class IBKRCmdlineApp:
                 trend = "="
 
             # fmt: off
-            return " ".join(
-                [
+            # Use display_config to determine which fields to show for stocks/ETFs
+            quote_mode = display_config.quote_preset
+
+            # Format bid/ask with sizes
+            bid_display = f"{c.bid or np.nan:>10,.{decimals}f} x {b_s}"
+            ask_display = f"{ask or np.nan:>10,.{decimals}f} x {a_s}"
+            spread_display = fmtEquitySpread(ask - usePrice, decimals) if (ask and ask >= usePrice) else ''
+
+            # Build field list based on preset
+            if quote_mode == "minimal":
+                # Minimal: sym, price, bid/ask, change%
+                fields = [
+                    f"{ls:<9}",
+                    f"{usePrice:>10,.{decimals}f}",
+                    f"{c.bid or np.nan:>10,.{decimals}f} x {ask or np.nan:>10,.{decimals}f}",
+                    f"{pctUpClose}",
+                ]
+            elif quote_mode in ["compact", "scalping"]:
+                # Compact: sym, ema100, trend, price±spread, bid/ask+size
+                fields = [
+                    f"{ls:<9}",
+                    f"{e100:>10,.{decimals}f}",
+                    f"{trend}",
+                    f"{usePrice:>10,.{decimals}f} ±{spread_display:<6}",
+                    f"<aaa bg='purple'>{bid_display} {ask_display}</aaa>",
+                ]
+            elif quote_mode == "trading":
+                # Trading: sym, ema100>ema300, price±spread, high/low, bid/ask+size, atr
+                fields = [
+                    f"{ls:<9}",
+                    f"{e100:>10,.{decimals}f} {trend} {e300:>10,.{decimals}f}",
+                    f"{usePrice:>10,.{decimals}f} ±{spread_display:<6}",
+                    f"{high or np.nan:>10,.{decimals}f}",
+                    f"{low or np.nan:>10,.{decimals}f}",
+                    f"<aaa bg='purple'>{bid_display} {ask_display}</aaa>",
+                    f"({atr})",
+                ]
+            elif quote_mode == "analysis":
+                # Analysis: sym, ema100(diff)>ema300(diff), price±spread, vwap, bid/ask
+                fields = [
+                    f"{ls:<9}",
+                    f"{e100:>10,.{decimals}f}({e100diff:>6,.2f})" if e100diff else f"{e100:>10,.{decimals}f}(      )",
+                    f"{trend}",
+                    f"{e300:>10,.{decimals}f}({e300diff:>6,.2f})" if e300diff else f"{e300:>10,.{decimals}f}(      )",
+                    f"{usePrice:>10,.{decimals}f} ±{spread_display:<6}",
+                    f"({pctVWAP} {amtVWAPColor})",
+                    f"<aaa bg='purple'>{c.bid or np.nan:>10,.{decimals}f} x {ask or np.nan:>10,.{decimals}f}</aaa>",
+                ]
+            else:  # full or default
+                # Full: all fields (original display)
+                fields = [
                     f"{ls:<9}",
                     f"{e100:>10,.{decimals}f}",
                     f"({e100diff:>6,.2f})" if e100diff else "(      )",
                     f"{trend}",
                     f"{e300:>10,.{decimals}f}",
                     f"({e300diff:>6,.2f})" if e300diff else "(      )",
-                    f"{usePrice:>10,.{decimals}f} ±{fmtEquitySpread(ask - usePrice, decimals) if (ask and ask >= usePrice) else '':<6}",
+                    f"{usePrice:>10,.{decimals}f} ±{spread_display:<6}",
                     f"{high or np.nan:>10,.{decimals}f}",
                     f"{low or np.nan:>10,.{decimals}f}",
-                    f"<aaa bg='purple'>{c.bid or np.nan:>10,.{decimals}f} x {b_s} {ask or np.nan:>10,.{decimals}f} x {a_s}</aaa>",
+                    f"<aaa bg='purple'>{bid_display} {ask_display}</aaa>",
                     f"({atr})",
                     f"({pctVWAP} {amtVWAPColor})",
                     f"{close or np.nan:>10,.{decimals}f}",
                     f"({ago:>7})",
-                    # Only show "last trade ago" if it is recent enough
                     f"@ ({agoLastTrade})" if agoLastTrade else "",
                     "     HALTED!" if c.halted else "",
                 ]
-            )
+
+            return " ".join(fields)
             # fmt: on
 
         try:

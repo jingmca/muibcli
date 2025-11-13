@@ -463,7 +463,22 @@ class IOpPositions(IOp):
         else:
             # Wide terminal - show more details but still hide some columns
             drop_cols = ["closeOrder", "closeOrderValue", "closeOrderProfit", "conId", "exch"]
-            display_df = allPositions.drop(columns=[col for col in drop_cols if col in allPositions.columns])
+            display_df = allPositions.drop(columns=[col for col in drop_cols if col in allPositions.columns]).copy()
+
+            # Format option symbols to OCC even in full/wide mode
+            for idx in display_df.index:
+                if idx != "Total":
+                    row = allPositions.loc[idx]
+                    if row["type"] in {"OPT", "FOP"} and pd.notna(row.get("strike")):
+                        date_str = str(row.get("date", ""))
+                        strike = row.get("strike", 0)
+                        pc = row.get("PC", "")
+                        symbol = str(row["sym"])
+
+                        # Use OCC format for options in wide display too
+                        display_df.at[idx, "sym"] = format_option_symbol(
+                            symbol, date_str, strike, pc, "occ"
+                        )
 
             desc = "All Positions"
             if self.symbols:
@@ -529,7 +544,25 @@ class IOpPositions(IOp):
 
                 printFrame(spread_display, f"[{sym} {exp_display}] Spread")
             else:
-                printFrame(spread, f"[{sym}] Potential Spread Identified")
+                # Wide terminal spread display - also format option symbols to OCC
+                spread_occ = spread.copy()
+
+                # Format option symbols to OCC format
+                for idx in spread_occ.index:
+                    if idx != "Total":
+                        row = spread.loc[idx]
+                        if row["type"] in {"OPT", "FOP"} and pd.notna(row.get("strike")):
+                            date_str = str(row.get("date", ""))
+                            strike = row.get("strike", 0)
+                            pc = row.get("PC", "")
+                            symbol = str(row["sym"])
+
+                            # Use OCC format for spread display too
+                            spread_occ.at[idx, "sym"] = format_option_symbol(
+                                symbol, date_str, strike, pc, "occ"
+                            )
+
+                printFrame(spread_occ, f"[{sym}] Potential Spread Identified")
 
             matchingContracts = [
                 contract
