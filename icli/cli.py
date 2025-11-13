@@ -80,6 +80,7 @@ from tradeapis.ordermgr import Trade as OrderMgrTrade
 
 from icli import cmds
 from icli.cmds.orders.straddle import IOpStraddleQuote
+from icli.display_config import display_config
 from icli.helpers import *  # FUT_EXP and isset() is appearing from here
 
 USEastern: Final = pytz.timezone("US/Eastern")
@@ -4632,26 +4633,90 @@ class IBKRCmdlineApp:
 
                     # this is SINGLE LEG OPTION ROWS
                     # fmt: off
-                    return " ".join(
-                        [
+                    # Use display_config to determine which fields to show
+                    quote_mode = display_config.quote_preset
+
+                    # Calculate common price display
+                    mark_price = fmtPriceOpt(mark or (c.modelGreeks.optPrice if c.modelGreeks else 0))
+                    spread_price = fmtPriceOpt((ask or np.nan) - mark, decimals)
+                    bid_price = fmtPriceOpt(bid or np.nan)
+                    ask_price = fmtPriceOpt(ask or np.nan)
+
+                    # Build field list based on preset
+                    if quote_mode == "minimal":
+                        # Minimal: sym, mark, bid/ask, change%
+                        fields = [
+                            rowName,
+                            f"{mark_price:>6}",
+                            f"{bid_price:>6} x {ask_price:>6}",
+                            f"{pctBigClose}",
+                        ]
+                    elif quote_mode in ["compact", "scalping"]:
+                        # Compact: sym, [u], [d], mark±spread, bid/ask+size
+                        fields = [
+                            rowName,
+                            f"[u{und or np.nan:>6,.1f}]",
+                            f"[d{delta or np.nan:>+5.2f}]",
+                            f"{mark_price:>6}±{spread_price:<4}",
+                            f"{bid_price:>6}x{b_s} {ask_price:>6}x{a_s}",
+                        ]
+                    elif quote_mode == "trading":
+                        # Trading: sym, [u ITM], [d], ema>ema, mark±spread, bid/ask+size, dte
+                        dte_str = f"{when:.0f}d" if when >= 1 else f"{as_duration(when * 86400)}"
+                        fields = [
+                            rowName,
+                            f"[u{und or np.nan:>6,.1f} {itm}]",
+                            f"[d{delta or np.nan:>+5.2f}]",
+                            f"{fmtPriceOpt(e100):>6}{trend}{fmtPriceOpt(e300):>6}",
+                            f"{mark_price:>6}±{spread_price:<4}",
+                            f"{bid_price:>6}x{b_s} {ask_price:>6}x{a_s}",
+                            f"{dte_str}",
+                        ]
+                    elif quote_mode == "options":
+                        # Options: sym, [u ITM %], [iv d g t], mark±spread, bid/ask+size, dte
+                        gamma = c.modelGreeks.gamma if c.modelGreeks else np.nan
+                        theta = c.modelGreeks.theta if c.modelGreeks else np.nan
+                        dte_str = f"{when:.0f}d" if when >= 1 else f"{as_duration(when * 86400)}"
+                        fields = [
+                            rowName,
+                            f"[u{und or np.nan:>6,.1f} {itm} {underlyingStrikeDifference or np.nan:>+5.1f}%]",
+                            f"[iv{iv or np.nan:.2f} d{delta or np.nan:>+5.2f} g{gamma or np.nan:.2f} t{theta or np.nan:>+5.2f}]",
+                            f"{mark_price:>6}±{spread_price:<4}",
+                            f"{bid_price:>6}x{b_s} {ask_price:>6}x{a_s}",
+                            f"{dte_str}",
+                        ]
+                    elif quote_mode == "analysis":
+                        # Analysis: sym, [u], ema details, mark±spread, vwap, bid/ask, dte
+                        dte_str = f"{when:.0f}d" if when >= 1 else f"{as_duration(when * 86400)}"
+                        fields = [
+                            rowName,
+                            f"[u{und or np.nan:>6,.1f}]",
+                            f"e100:{fmtPriceOpt(e100):>6}{trend}e300:{fmtPriceOpt(e300):>6}",
+                            f"{mark_price:>6}±{spread_price:<4}",
+                            f"{amtVWAPColor}",
+                            f"{bid_price:>6}x{ask_price:>6}",
+                            f"{dte_str}",
+                        ]
+                    else:  # full or default
+                        # Full: all fields (original display)
+                        fields = [
                             rowName,
                             f"[u {und or np.nan:>8,.2f} ({itm:<1} {underlyingStrikeDifference or np.nan:>7,.2f}%)]",
                             f"[iv {iv or np.nan:.2f}]",
                             f"[d {delta or np.nan:>5.2f}]",
-                            # do we want to show theta or not? Not useful for intra-day trading and we have it in `info` output anyway too.
-                            # f"[t {theta or np.nan:>5.2f}]",
                             f"{fmtPriceOpt(e100):>6}",
                             f"{trend}",
                             f"{fmtPriceOpt(e300):>6}",
-                            f"{fmtPriceOpt(mark or (c.modelGreeks.optPrice if c.modelGreeks else 0)):>6} ±{fmtPriceOpt((ask or np.nan) - mark, decimals):<4}",
-                            f" {fmtPriceOpt(bid or np.nan):>6} x {b_s}   {fmtPriceOpt(ask or np.nan):>6} x {a_s}",
+                            f"{mark_price:>6} ±{spread_price:<4}",
+                            f" {bid_price:>6} x {b_s}   {ask_price:>6} x {a_s}",
                             f"{amtVWAPColor}",
                             f" ({ago:>7})",
                             f" (s {compensated:>8,.2f} @ {compdiff:>6,.2f})",
                             f" ({when:>3.2f} d)" if when >= 1 else f" ({as_duration(when * 86400)})",
                             "HALTED!" if c.halted else "",
                         ]
-                    )
+
+                    return " ".join(fields)
                     # fmt: ond
 
             # TODO: pre-market and after-market hours don't update the high/low values, so these are
