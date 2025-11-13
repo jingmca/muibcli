@@ -18,6 +18,7 @@ from mutil.numeric import fmtPrice
 
 from icli.cmds.base import IOp, command
 from icli.helpers import *
+from icli.display_config import display_config
 
 if TYPE_CHECKING:
     pass
@@ -396,26 +397,28 @@ class IOpPositions(IOp):
             # Create compact dataframe first
             compact_df = allPositions[available_cols].copy()
 
-            # Now format option symbols in the copy
+            # Format option symbols using new format_option_symbol() function
+            # Determine format mode based on display preset
+            if display_config.position_preset == "minimal":
+                option_mode = "minimal"
+            elif display_config.position_preset in ["compact", "trading"]:
+                option_mode = "compact"
+            else:
+                option_mode = "compact"  # Default
+
             for idx in compact_df.index:
                 if idx != "Total":
                     row = allPositions.loc[idx]
                     if row["type"] in {"OPT", "FOP"} and pd.notna(row.get("strike")):
-                        # Format: SYMBOL EXPDATE STRIKE PC
                         date_str = str(row.get("date", ""))
-
-                        # Extract MMDD from date string (now it's always a string in YYYYMMDD format)
-                        if len(date_str) >= 8:
-                            exp_date = f"{date_str[4:6]}{date_str[6:8]}"
-                        else:
-                            exp_date = ""
-
-                        strike_val = f"{row['strike']:.0f}" if pd.notna(row.get("strike")) else ""
+                        strike = row.get("strike", 0)
                         pc = row.get("PC", "")
-                        symbol = str(row["sym"])[:6]  # Limit base symbol to 6 chars
+                        symbol = str(row["sym"])
 
-                        # Create compact option symbol in compact_df
-                        compact_df.at[idx, "sym"] = f"{symbol} {exp_date} {strike_val}{pc}"
+                        # Use new format_option_symbol() function
+                        compact_df.at[idx, "sym"] = format_option_symbol(
+                            symbol, date_str, strike, pc, option_mode
+                        )
 
             # Rename columns to shorter names
             rename_map = {v: k for k, v in col_mapping.items()}

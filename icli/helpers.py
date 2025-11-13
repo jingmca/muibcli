@@ -2,6 +2,87 @@
 
 from __future__ import annotations
 
+
+# ========== Option Symbol Formatting ==========
+
+def format_option_symbol(
+    symbol: str,
+    date: str,
+    strike: float,
+    pc: str,
+    mode: str = "compact"
+) -> str:
+    """Format option symbol based on display mode.
+
+    Args:
+        symbol: Underlying symbol (e.g., 'AAPL')
+        date: Expiration date in YYYYMMDD format
+        strike: Strike price
+        pc: Put/Call flag ('P' or 'C')
+        mode: Display mode ('minimal', 'compact', 'standard', 'occ')
+
+    Returns:
+        Formatted option symbol
+
+    Examples:
+        >>> format_option_symbol("AAPL", "20240816", 220.0, "C", "compact")
+        'AAPL 0816 C220'
+
+        >>> format_option_symbol("AAPL", "20240816", 220.5, "C", "compact")
+        'AAPL 0816 C220.5'
+
+        >>> format_option_symbol("AAPL", "20240816", 220.0, "C", "minimal")
+        'AAPL24C220'
+
+        >>> format_option_symbol("AAPL", "20240816", 220.0, "C", "occ")
+        'AAPL240816C00220000'
+    """
+    # Extract date components
+    if len(date) >= 8:
+        yy = date[2:4]    # YY
+        mm = date[4:6]    # MM
+        dd = date[6:8]    # DD
+        mmdd = mm + dd    # MMDD
+    else:
+        yy = mm = dd = mmdd = ""
+
+    # Format strike
+    strike_int = int(strike)
+    strike_decimal = strike - strike_int
+    has_decimal = strike_decimal > 0.001  # tolerance for floating point
+
+    if mode == "minimal":
+        # Ultra compact: AAPL24C220 or AAPL24C220.5
+        if has_decimal:
+            # Only show 1 decimal for fractional strikes
+            return f"{symbol}{yy}{pc}{strike:.1f}"
+        else:
+            return f"{symbol}{yy}{pc}{strike_int}"
+
+    elif mode == "compact":
+        # Compact: AAPL 0816 C220 or AAPL 0816 C220.5
+        if has_decimal:
+            return f"{symbol} {mmdd} {pc}{strike:.1f}"
+        else:
+            return f"{symbol} {mmdd} {pc}{strike_int}"
+
+    elif mode == "standard":
+        # Standard: AAPL 240816 C220.00
+        return f"{symbol} {yy}{mmdd} {pc}{strike:.2f}"
+
+    elif mode == "occ":
+        # Full OCC: AAPL240816C00220000
+        strike_padded = f"{int(strike * 1000):08d}"
+        return f"{symbol}{yy}{mm}{dd}{pc}{strike_padded}"
+
+    else:
+        # Default to compact
+        if has_decimal:
+            return f"{symbol} {mmdd} {pc}{strike:.1f}"
+        else:
+            return f"{symbol} {mmdd} {pc}{strike_int}"
+
+
 import asyncio
 import bisect
 import enum
