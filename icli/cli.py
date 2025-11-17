@@ -4063,6 +4063,29 @@ class IBKRCmdlineApp:
         def formatTicker(c):
             ls = lookupKey(c.contract)
 
+            # Get position information for this contract if it exists
+            position_qty = 0
+            position_cost = 0.0
+            has_position = False
+            try:
+                contractId = c.contract.conId
+                accountReader = self.ib.wrapper.portfolio[self.accountId]
+                if contractId in accountReader:
+                    position_qty = accountReader[contractId].position
+                    # For display, get the per-share cost not the total cost
+                    multiplier = float(c.contract.multiplier or 1)
+                    position_cost = accountReader[contractId].averageCost / abs(position_qty) if position_qty != 0 else 0
+                    # For options, de-adjust by multiplier to get per-share cost
+                    if isinstance(c.contract, (Option, FuturesOption)):
+                        position_cost = position_cost / multiplier
+                    # Apply sign for shorts
+                    if position_qty < 0:
+                        position_cost = -abs(position_cost)
+                    has_position = True
+            except:
+                # No position for this contract
+                pass
+
             # ibkr API keeps '.close' as the previous full market day close until the next
             # full market day, so for example over the weekend where there isn't a new "full
             # market day," the '.close' is always Thursday's close, while '.last' will be the last
@@ -4578,14 +4601,20 @@ class IBKRCmdlineApp:
                     #   - terminal height: 60+ characters
 
                     # guard the ITM flag because after hours 'underlying price' isn't populated in option quotes
+                    # Enhanced ITM display with color coding
                     itm = ""
+                    itm_display = ""
                     if delta and und and mark:
                         if delta > 0 and und >= price:
-                            # calls
+                            # calls ITM - use bright highlighting
                             itm = "I"
+                            itm_display = "<aaa bg='ansibrightgreen'>ITM</aaa>"
                         elif delta < 0 and und <= price:
-                            # puts
+                            # puts ITM - use bright highlighting
                             itm = "I"
+                            itm_display = "<aaa bg='ansibrightgreen'>ITM</aaa>"
+                        else:
+                            itm_display = "   "
 
                     # "compensated" is acquisiton price for the underlying if you short this strike.
                     # basically (strike - premium) == price of underlying if you get assigned.
@@ -4642,66 +4671,83 @@ class IBKRCmdlineApp:
                     bid_price = fmtPriceOpt(bid or np.nan)
                     ask_price = fmtPriceOpt(ask or np.nan)
 
+                    # Build position info display
+                    pos_display = ""
+                    if has_position:
+                        # Format position with qty and cost
+                        pos_sign = "+" if position_qty > 0 else ""
+                        pos_display = f" <b>[Pos:{pos_sign}{position_qty:.0f}@{position_cost:.2f}]</b>"
+
                     # Build field list based on preset
                     if quote_mode == "minimal":
-                        # Minimal: sym, mark, bid/ask, change%
+                        # Minimal: sym, mark, bid/ask, change%, [position]
                         fields = [
                             rowName,
                             f"{mark_price:>6}",
                             f"{bid_price:>6} x {ask_price:>6}",
                             f"{pctBigClose}",
                         ]
+                        if has_position:
+                            fields.append(pos_display)
                     elif quote_mode in ["compact", "scalping"]:
-                        # Compact: sym, [u], [d], mark±spread, bid/ask+size
+                        # Compact: sym, [u ITM], [d], mark±spread, bid/ask+size, [position]
                         fields = [
                             rowName,
-                            f"[u{und or np.nan:>6,.1f}]",
+                            f"[u{und or np.nan:>6,.1f} {itm_display}]",
                             f"[d{delta or np.nan:>+5.2f}]",
                             f"{mark_price:>6}±{spread_price:<4}",
                             f"{bid_price:>6}x{b_s} {ask_price:>6}x{a_s}",
                         ]
+                        if has_position:
+                            fields.append(pos_display)
                     elif quote_mode == "trading":
-                        # Trading: sym, [u ITM], [d], ema>ema, mark±spread, bid/ask+size, dte
+                        # Trading: sym, [u ITM], [d], ema>ema, mark±spread, bid/ask+size, dte, [position]
                         dte_str = f"{when:.0f}d" if when >= 1 else f"{as_duration(when * 86400)}"
                         fields = [
                             rowName,
-                            f"[u{und or np.nan:>6,.1f} {itm}]",
+                            f"[u{und or np.nan:>6,.1f} {itm_display}]",
                             f"[d{delta or np.nan:>+5.2f}]",
                             f"{fmtPriceOpt(e100):>6}{trend}{fmtPriceOpt(e300):>6}",
                             f"{mark_price:>6}±{spread_price:<4}",
                             f"{bid_price:>6}x{b_s} {ask_price:>6}x{a_s}",
                             f"{dte_str}",
                         ]
+                        if has_position:
+                            fields.append(pos_display)
                     elif quote_mode == "options":
-                        # Options: sym, [u ITM %], [iv d g t], mark±spread, bid/ask+size, dte
+                        # Options: sym, [u ITM %], [iv d g t], mark±spread, bid/ask+size, dte, [position]
                         gamma = c.modelGreeks.gamma if c.modelGreeks else np.nan
                         theta = c.modelGreeks.theta if c.modelGreeks else np.nan
                         dte_str = f"{when:.0f}d" if when >= 1 else f"{as_duration(when * 86400)}"
                         fields = [
                             rowName,
-                            f"[u{und or np.nan:>6,.1f} {itm} {underlyingStrikeDifference or np.nan:>+5.1f}%]",
+                            f"[u{und or np.nan:>6,.1f} {itm_display} {underlyingStrikeDifference or np.nan:>+5.1f}%]",
                             f"[iv{iv or np.nan:.2f} d{delta or np.nan:>+5.2f} g{gamma or np.nan:.2f} t{theta or np.nan:>+5.2f}]",
                             f"{mark_price:>6}±{spread_price:<4}",
                             f"{bid_price:>6}x{b_s} {ask_price:>6}x{a_s}",
                             f"{dte_str}",
                         ]
+                        if has_position:
+                            fields.append(pos_display)
                     elif quote_mode == "analysis":
-                        # Analysis: sym, [u], ema details, mark±spread, vwap, bid/ask, dte
+                        # Analysis: sym, [u ITM], ema details, mark±spread, vwap, bid/ask, dte, [position]
                         dte_str = f"{when:.0f}d" if when >= 1 else f"{as_duration(when * 86400)}"
                         fields = [
                             rowName,
-                            f"[u{und or np.nan:>6,.1f}]",
+                            f"[u{und or np.nan:>6,.1f} {itm_display}]",
                             f"e100:{fmtPriceOpt(e100):>6}{trend}e300:{fmtPriceOpt(e300):>6}",
                             f"{mark_price:>6}±{spread_price:<4}",
                             f"{amtVWAPColor}",
                             f"{bid_price:>6}x{ask_price:>6}",
                             f"{dte_str}",
                         ]
+                        if has_position:
+                            fields.append(pos_display)
                     else:  # full or default
-                        # Full: all fields (original display)
+                        # Full: all fields (original display) + [position]
                         fields = [
                             rowName,
-                            f"[u {und or np.nan:>8,.2f} ({itm:<1} {underlyingStrikeDifference or np.nan:>7,.2f}%)]",
+                            f"[u {und or np.nan:>8,.2f} ({itm_display if itm else itm:<1} {underlyingStrikeDifference or np.nan:>7,.2f}%)]",
                             f"[iv {iv or np.nan:.2f}]",
                             f"[d {delta or np.nan:>5.2f}]",
                             f"{fmtPriceOpt(e100):>6}",
@@ -4715,6 +4761,8 @@ class IBKRCmdlineApp:
                             f" ({when:>3.2f} d)" if when >= 1 else f" ({as_duration(when * 86400)})",
                             "HALTED!" if c.halted else "",
                         ]
+                        if has_position:
+                            fields.append(pos_display)
 
                     return " ".join(fields)
                     # fmt: ond
@@ -4832,17 +4880,26 @@ class IBKRCmdlineApp:
             ask_display = f"{ask or np.nan:>10,.{decimals}f} x {a_s}"
             spread_display = fmtEquitySpread(ask - usePrice, decimals) if (ask and ask >= usePrice) else ''
 
+            # Build position info display for stocks
+            pos_display = ""
+            if has_position:
+                # Format position with qty and cost
+                pos_sign = "+" if position_qty > 0 else ""
+                pos_display = f" <b>[Pos:{pos_sign}{position_qty:.0f}@{position_cost:.2f}]</b>"
+
             # Build field list based on preset
             if quote_mode == "minimal":
-                # Minimal: sym, price, bid/ask, change%
+                # Minimal: sym, price, bid/ask, change%, [position]
                 fields = [
                     f"{ls:<9}",
                     f"{usePrice:>10,.{decimals}f}",
                     f"{c.bid or np.nan:>10,.{decimals}f} x {ask or np.nan:>10,.{decimals}f}",
                     f"{pctUpClose}",
                 ]
+                if has_position:
+                    fields.append(pos_display)
             elif quote_mode in ["compact", "scalping"]:
-                # Compact: sym, ema100, trend, price±spread, bid/ask+size
+                # Compact: sym, ema100, trend, price±spread, bid/ask+size, [position]
                 fields = [
                     f"{ls:<9}",
                     f"{e100:>10,.{decimals}f}",
@@ -4850,8 +4907,10 @@ class IBKRCmdlineApp:
                     f"{usePrice:>10,.{decimals}f} ±{spread_display:<6}",
                     f"<aaa bg='purple'>{bid_display} {ask_display}</aaa>",
                 ]
+                if has_position:
+                    fields.append(pos_display)
             elif quote_mode == "trading":
-                # Trading: sym, ema100>ema300, price±spread, high/low, bid/ask+size, atr
+                # Trading: sym, ema100>ema300, price±spread, high/low, bid/ask+size, atr, [position]
                 fields = [
                     f"{ls:<9}",
                     f"{e100:>10,.{decimals}f} {trend} {e300:>10,.{decimals}f}",
@@ -4861,8 +4920,10 @@ class IBKRCmdlineApp:
                     f"<aaa bg='purple'>{bid_display} {ask_display}</aaa>",
                     f"({atr})",
                 ]
+                if has_position:
+                    fields.append(pos_display)
             elif quote_mode == "analysis":
-                # Analysis: sym, ema100(diff)>ema300(diff), price±spread, vwap, bid/ask
+                # Analysis: sym, ema100(diff)>ema300(diff), price±spread, vwap, bid/ask, [position]
                 fields = [
                     f"{ls:<9}",
                     f"{e100:>10,.{decimals}f}({e100diff:>6,.2f})" if e100diff else f"{e100:>10,.{decimals}f}(      )",
@@ -4872,8 +4933,10 @@ class IBKRCmdlineApp:
                     f"({pctVWAP} {amtVWAPColor})",
                     f"<aaa bg='purple'>{c.bid or np.nan:>10,.{decimals}f} x {ask or np.nan:>10,.{decimals}f}</aaa>",
                 ]
+                if has_position:
+                    fields.append(pos_display)
             else:  # full or default
-                # Full: all fields (original display)
+                # Full: all fields (original display) + [position]
                 fields = [
                     f"{ls:<9}",
                     f"{e100:>10,.{decimals}f}",
@@ -4892,6 +4955,8 @@ class IBKRCmdlineApp:
                     f"@ ({agoLastTrade})" if agoLastTrade else "",
                     "     HALTED!" if c.halted else "",
                 ]
+                if has_position:
+                    fields.append(pos_display)
 
             return " ".join(fields)
             # fmt: on

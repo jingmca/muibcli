@@ -37,6 +37,48 @@ class IOpPositions(IOp):
     def argmap(self):
         return [DArg("*symbols", convert=lambda x: set([sym.upper() for sym in x]))]
 
+    def _format_pnl_with_color(self, value: float) -> str:
+        """Format PNL value with color coding using ANSI escape codes.
+
+        Green for profit (positive), Red for loss (negative), Gray for zero.
+        Uses right-aligned formatting to maintain column alignment.
+        """
+        # Format number with fixed width for alignment
+        formatted = f"{value:>12,.2f}"
+
+        # ANSI color codes
+        # Foreground colors
+        GREEN = '\033[32m'
+        RED = '\033[31m'
+        GRAY = '\033[90m'
+        # Background colors
+        BG_GREEN = '\033[42m'
+        BG_RED = '\033[41m'
+        BG_BRIGHT_GREEN = '\033[102m'
+        BG_BRIGHT_RED = '\033[101m'
+        # Reset
+        RESET = '\033[0m'
+
+        if value > 0:
+            # Profit: green color with intensity based on magnitude
+            if value > 10000:
+                return f"{BG_BRIGHT_GREEN}{formatted}{RESET}"
+            elif value > 1000:
+                return f"{BG_GREEN}{formatted}{RESET}"
+            else:
+                return f"{GREEN}{formatted}{RESET}"
+        elif value < 0:
+            # Loss: red color with intensity based on magnitude
+            if value < -10000:
+                return f"{BG_BRIGHT_RED}{formatted}{RESET}"
+            elif value < -1000:
+                return f"{BG_RED}{formatted}{RESET}"
+            else:
+                return f"{RED}{formatted}{RESET}"
+        else:
+            # Zero or very small: gray
+            return f"{GRAY}{formatted}{RESET}"
+
     def totalFrame(self, df, costPrice=False):
         if df.empty:
             return None
@@ -108,7 +150,21 @@ class IOpPositions(IOp):
                 else x
             )
         )
-        df.loc[:, simpleCols] = df[simpleCols].astype(float).map(lambda x: f"{x:,.2f}")
+
+        # Format PNL columns with color coding (red for loss, green for profit)
+        pnl_cols = ["unrealizedPNL", "dailyPNL"]
+        non_pnl_cols = [col for col in simpleCols if col not in pnl_cols]
+
+        # Format non-PNL columns normally
+        if non_pnl_cols:
+            df.loc[:, non_pnl_cols] = df[non_pnl_cols].astype(float).map(lambda x: f"{x:,.2f}")
+
+        # Format PNL columns with color
+        for pnl_col in pnl_cols:
+            if pnl_col in df.columns:
+                df.loc[:, pnl_col] = df[pnl_col].astype(float).map(
+                    lambda x: self._format_pnl_with_color(x) if x == x else f"{x:,.2f}"  # x == x checks for non-NaN
+                )
 
         # show fractional shares only if they exist
         defaultG = ["position"]
@@ -462,7 +518,15 @@ class IOpPositions(IOp):
             if "mktValue" in compact_df.columns:
                 compact_df["mktValue"] = pd.to_numeric(compact_df["mktValue"].astype(str).str.replace(',', ''), errors='coerce').round(0)
             if "PNL" in compact_df.columns:
-                compact_df["PNL"] = pd.to_numeric(compact_df["PNL"].astype(str).str.replace(',', ''), errors='coerce').round(0)
+                # Remove ANSI codes before converting to numeric, then reapply colors
+                compact_df["PNL"] = pd.to_numeric(
+                    compact_df["PNL"].astype(str).str.replace(r'\033\[[0-9;]+m', '', regex=True).str.replace(',', ''),
+                    errors='coerce'
+                ).round(0)
+                # Reapply PNL colors after numeric formatting
+                compact_df["PNL"] = compact_df["PNL"].map(
+                    lambda x: self._format_pnl_with_color(x) if pd.notna(x) else "0.00"
+                )
             if "w%" in compact_df.columns:
                 compact_df["w%"] = pd.to_numeric(compact_df["w%"], errors='coerce').fillna(0.0).round(2)
 
@@ -552,7 +616,15 @@ class IOpPositions(IOp):
                 if "mktValue" in spread_display.columns:
                     spread_display["mktValue"] = pd.to_numeric(spread_display["mktValue"], errors='coerce').round(0)
                 if "PNL" in spread_display.columns:
-                    spread_display["PNL"] = pd.to_numeric(spread_display["PNL"], errors='coerce').round(0)
+                    # Remove ANSI codes before converting to numeric, then reapply colors
+                    spread_display["PNL"] = pd.to_numeric(
+                        spread_display["PNL"].astype(str).str.replace(r'\033\[[0-9;]+m', '', regex=True),
+                        errors='coerce'
+                    ).round(0)
+                    # Reapply PNL colors after numeric formatting
+                    spread_display["PNL"] = spread_display["PNL"].map(
+                        lambda x: self._format_pnl_with_color(x) if pd.notna(x) else "0.00"
+                    )
                 if "w%" in spread_display.columns:
                     spread_display["w%"] = pd.to_numeric(spread_display["w%"], errors='coerce').fillna(0.0).round(2)
 
@@ -622,7 +694,15 @@ class IOpPositions(IOp):
                     if "mktValue" in spread_display.columns:
                         spread_display["mktValue"] = pd.to_numeric(spread_display["mktValue"], errors='coerce').round(0)
                     if "PNL" in spread_display.columns:
-                        spread_display["PNL"] = pd.to_numeric(spread_display["PNL"], errors='coerce').round(0)
+                        # Remove ANSI codes before converting to numeric, then reapply colors
+                        spread_display["PNL"] = pd.to_numeric(
+                            spread_display["PNL"].astype(str).str.replace(r'\033\[[0-9;]+m', '', regex=True),
+                            errors='coerce'
+                        ).round(0)
+                        # Reapply PNL colors after numeric formatting
+                        spread_display["PNL"] = spread_display["PNL"].map(
+                            lambda x: self._format_pnl_with_color(x) if pd.notna(x) else "0.00"
+                        )
                     if "w%" in spread_display.columns:
                         spread_display["w%"] = pd.to_numeric(spread_display["w%"], errors='coerce').fillna(0.0).round(2)
 

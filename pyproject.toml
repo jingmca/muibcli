@@ -40,7 +40,7 @@ beautifulsoup4 = "^4.9.3"
 # tradeapis = { path = "../clients/", develop = true }
 tradeapis = { git = "https://github.com/mattsta/tradeapis.git", tag="3.4.6" }
 schedule = "^1.1.0"
-httpx = "^0.28.1"
+httpx = {extras = ["socks"], version = "^0.28.1"}
 whenever = "^0.6.9"
 python-dateutil = "^2.9.0.post0"
 
