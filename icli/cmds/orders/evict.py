@@ -117,8 +117,12 @@ class IOpPositionEvict(IOp):
                 algo = "PRTMKT"
 
             # if user provided their own algo name, override all our defaults and use the user's algo choice instead
+            preview_mode = ""
             if self.algo:
                 algo = self.algo[0]
+                # Check if "preview" is in the remaining args
+                if len(self.algo) > 1 and "preview" in self.algo:
+                    preview_mode = " preview"
 
             logger.info(
                 "[{}] [{}] Submitting through spread tracking order automation...",
@@ -134,7 +138,7 @@ class IOpPositionEvict(IOp):
 
             # closing is the opposite of the quantity sign from the portfolio (10 long to -10 short (close), etc)
             qty = -qty
-            runners.append(self.runoplive("buy", f"{quoteKey} {qty} {algo}"))
+            runners.append(self.runoplive("buy", f"{quoteKey} {qty} {algo}{preview_mode}"))
 
         if runners:
             await asyncio.gather(*runners)

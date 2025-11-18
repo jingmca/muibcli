@@ -3102,7 +3102,40 @@ class IBKRCmdlineApp:
         # Official error code list:
         # https://interactivebrokers.github.io/tws-api/message_codes.html
         # (note: not all message codes are listed in their API docs, of course)
-        if errorCode in {1102, 2104, 2108, 2106, 2107, 2119, 2152, 2158}:
+
+        # Completely ignore these error codes (don't log at all)
+        if errorCode in {2103, 2150, 2157}:
+            # 2103: Market data farm connection is broken (noisy, pairs with 2104)
+            # 2150: Invalid position trade derived value (startup errors for stale orders)
+            # 2157: sec-def data farm connection errors (noisy and can be safely ignored)
+            return
+
+        # Special threshold for data farm OK messages: 10 times in 15 minutes
+        if errorCode in {2104, 2105, 2106}:
+            # 2104: Market data farm connection is OK
+            # 2105: HMDS data farm connection is broken
+            # 2106: HMDS data farm connection is OK
+            msg = f"API Status [code {errorCode}]: {readableHTML(errorString)}"
+
+            # Use threshold system to track occurrences
+            should_display, count = self.thresholdErrorHandler.should_display_error(
+                error_code=str(errorCode)
+            )
+
+            # Override threshold: only display if >= 10 times (not default 15)
+            if count >= 10:
+                logger.info(
+                    "{} (occurred {} times in last {} minutes)",
+                    msg,
+                    count,
+                    int(self.thresholdErrorHandler.time_window / 60),
+                )
+            else:
+                # Only log to file
+                logger.bind(suppress_terminal=True).debug(msg)
+            return
+
+        if errorCode in {1102, 2108, 2107, 2119, 2152, 2158}:
             # non-error status codes on startup or informational messages during running.
             # we ignore reqId here because it is either always -1 or a data request id (but never an order id)
             logger.info(
@@ -4072,11 +4105,12 @@ class IBKRCmdlineApp:
                 accountReader = self.ib.wrapper.portfolio[self.accountId]
                 if contractId in accountReader:
                     position_qty = accountReader[contractId].position
-                    # For display, get the per-share cost not the total cost
-                    multiplier = float(c.contract.multiplier or 1)
-                    position_cost = accountReader[contractId].averageCost / abs(position_qty) if position_qty != 0 else 0
-                    # For options, de-adjust by multiplier to get per-share cost
+                    # Get average cost per contract from IBKR
+                    # Note: IBKR's averageCost is always per-contract cost (see helpers.py:2223)
+                    position_cost = accountReader[contractId].averageCost
+                    # For options, convert from per-contract to per-share cost
                     if isinstance(c.contract, (Option, FuturesOption)):
+                        multiplier = float(c.contract.multiplier or 1)
                         position_cost = position_cost / multiplier
                     # Apply sign for shorts
                     if position_qty < 0:

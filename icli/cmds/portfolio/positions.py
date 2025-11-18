@@ -41,43 +41,41 @@ class IOpPositions(IOp):
         """Format PNL value with color coding using ANSI escape codes.
 
         Green for profit (positive), Red for loss (negative), Gray for zero.
-        Uses right-aligned formatting to maintain column alignment.
+        Let pandas handle alignment, just add colors.
         """
-        # Format number with fixed width for alignment
-        formatted = f"{value:>12,.2f}"
+        # Format number without fixed width - let pandas handle column alignment
+        formatted = f"{value:,.2f}"
 
-        # ANSI color codes
-        # Foreground colors
+        # ANSI color codes - all combinations have same total length for alignment
+        # Using \033[22m (not bold, 5 bytes) same length as \033[01m (bold, 5 bytes)
+        BOLD = '\033[01m'          # Padded with 0 to match length
+        NORMAL_WEIGHT = '\033[22m'  # Already 5 bytes
         GREEN = '\033[32m'
         RED = '\033[31m'
         GRAY = '\033[90m'
-        # Background colors
-        BG_GREEN = '\033[42m'
-        BG_RED = '\033[41m'
-        BG_BRIGHT_GREEN = '\033[102m'
-        BG_BRIGHT_RED = '\033[101m'
-        # Reset
+        BRIGHT_GREEN = '\033[92m'
+        BRIGHT_RED = '\033[91m'
         RESET = '\033[0m'
 
         if value > 0:
-            # Profit: green color with intensity based on magnitude
+            # Profit: green color with bold for larger amounts
             if value > 10000:
-                return f"{BG_BRIGHT_GREEN}{formatted}{RESET}"
+                return f"{BOLD}{BRIGHT_GREEN}{formatted}{RESET}"       # Bold bright green
             elif value > 1000:
-                return f"{BG_GREEN}{formatted}{RESET}"
+                return f"{BOLD}{GREEN}{formatted}{RESET}"              # Bold green
             else:
-                return f"{GREEN}{formatted}{RESET}"
+                return f"{NORMAL_WEIGHT}{GREEN}{formatted}{RESET}"     # Normal green (same code length)
         elif value < 0:
-            # Loss: red color with intensity based on magnitude
+            # Loss: red color with bold for larger amounts
             if value < -10000:
-                return f"{BG_BRIGHT_RED}{formatted}{RESET}"
+                return f"{BOLD}{BRIGHT_RED}{formatted}{RESET}"         # Bold bright red
             elif value < -1000:
-                return f"{BG_RED}{formatted}{RESET}"
+                return f"{BOLD}{RED}{formatted}{RESET}"                # Bold red
             else:
-                return f"{RED}{formatted}{RESET}"
+                return f"{NORMAL_WEIGHT}{RED}{formatted}{RESET}"       # Normal red (same code length)
         else:
             # Zero or very small: gray
-            return f"{GRAY}{formatted}{RESET}"
+            return f"{NORMAL_WEIGHT}{GRAY}{formatted}{RESET}"
 
     def totalFrame(self, df, costPrice=False):
         if df.empty:
@@ -155,15 +153,18 @@ class IOpPositions(IOp):
         pnl_cols = ["unrealizedPNL", "dailyPNL"]
         non_pnl_cols = [col for col in simpleCols if col not in pnl_cols]
 
-        # Format non-PNL columns normally
+        # Format non-PNL columns - let pandas handle alignment
         if non_pnl_cols:
-            df.loc[:, non_pnl_cols] = df[non_pnl_cols].astype(float).map(lambda x: f"{x:,.2f}")
+            for col in non_pnl_cols:
+                if col in df.columns:
+                    # Format all columns consistently without fixed width
+                    df.loc[:, col] = df[col].astype(float).map(lambda x: f"{x:,.2f}")
 
         # Format PNL columns with color
         for pnl_col in pnl_cols:
             if pnl_col in df.columns:
                 df.loc[:, pnl_col] = df[pnl_col].astype(float).map(
-                    lambda x: self._format_pnl_with_color(x) if x == x else f"{x:,.2f}"  # x == x checks for non-NaN
+                    lambda x: self._format_pnl_with_color(x) if x == x else f"{0.0:,.2f}"  # x == x checks for non-NaN
                 )
 
         # show fractional shares only if they exist
@@ -525,14 +526,18 @@ class IOpPositions(IOp):
                 ).round(0)
                 # Reapply PNL colors after numeric formatting
                 compact_df["PNL"] = compact_df["PNL"].map(
-                    lambda x: self._format_pnl_with_color(x) if pd.notna(x) else "0.00"
+                    lambda x: self._format_pnl_with_color(x) if pd.notna(x) else f"{0.0:,.2f}"
                 )
             if "w%" in compact_df.columns:
                 compact_df["w%"] = pd.to_numeric(compact_df["w%"], errors='coerce').fillna(0.0).round(2)
 
-            # Truncate symbol names to fit
+            # Truncate symbol names to fit (but preserve full OCC option symbols)
             if "sym" in compact_df.columns:
-                compact_df["sym"] = compact_df["sym"].astype(str).str[:15]
+                # Don't truncate option symbols (they need full OCC format: up to 21 chars)
+                # Only truncate stock/futures symbols if needed
+                compact_df["sym"] = compact_df["sym"].astype(str).apply(
+                    lambda s: s if (len(s) > 15 and any(c in s for c in 'CP') and s[-8:].isdigit()) else s[:15]
+                )
 
             # Log full details for reference
             logger.info("Compact view for terminal width: {}", terminal_width)
@@ -623,7 +628,7 @@ class IOpPositions(IOp):
                     ).round(0)
                     # Reapply PNL colors after numeric formatting
                     spread_display["PNL"] = spread_display["PNL"].map(
-                        lambda x: self._format_pnl_with_color(x) if pd.notna(x) else "0.00"
+                        lambda x: self._format_pnl_with_color(x) if pd.notna(x) else f"{0.0:,.2f}"
                     )
                 if "w%" in spread_display.columns:
                     spread_display["w%"] = pd.to_numeric(spread_display["w%"], errors='coerce').fillna(0.0).round(2)
@@ -701,7 +706,7 @@ class IOpPositions(IOp):
                         ).round(0)
                         # Reapply PNL colors after numeric formatting
                         spread_display["PNL"] = spread_display["PNL"].map(
-                            lambda x: self._format_pnl_with_color(x) if pd.notna(x) else "0.00"
+                            lambda x: self._format_pnl_with_color(x) if pd.notna(x) else f"{0.0:,.2f}"
                         )
                     if "w%" in spread_display.columns:
                         spread_display["w%"] = pd.to_numeric(spread_display["w%"], errors='coerce').fillna(0.0).round(2)
