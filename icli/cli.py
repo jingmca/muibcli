@@ -4988,11 +4988,12 @@ class IBKRCmdlineApp:
                     fields.append(pos_display)
             elif quote_mode in ["compact", "scalping"]:
                 # Compact: sym, price±spread, bid/ask+size, VWAP, OR30, [position]
+                # No labels for compact display
                 fields = [
                     f"{ls:<9}",
                     f"{usePrice:>10,.{decimals}f} ±{spread_display:<6}",
                     f"<aaa bg='purple'>{bid_display} {ask_display}</aaa>",
-                    f"VWAP:{vwap_value:>10,.{decimals}f}",
+                    f"{vwap_value:>10,.{decimals}f}",
                     or30_display,
                 ]
                 if has_position:
@@ -5025,14 +5026,15 @@ class IBKRCmdlineApp:
                     fields.append(pos_display)
             else:  # full or default
                 # Full: EMA5, EMA21 (15min), VWAP, OR30 + [position]
+                # Compact format without labels
                 fields = [
                     f"{ls:<9}",
-                    f"EMA5:{e100:>10,.{decimals}f}" if e100 else "EMA5:---",
+                    f"{e100:>10,.{decimals}f}" if e100 else "---",
                     f"{trend}",
-                    f"EMA21:{e300:>10,.{decimals}f}" if e300 else "EMA21:---",
+                    f"{e300:>10,.{decimals}f}" if e300 else "---",
                     f"{usePrice:>10,.{decimals}f} ±{spread_display:<6}",
                     f"<aaa bg='purple'>{bid_display} {ask_display}</aaa>",
-                    f"VWAP:{vwap_value:>10,.{decimals}f}",
+                    f"{vwap_value:>10,.{decimals}f}",
                     or30_display,
                     "HALTED!" if c.halted else "",
                 ]
