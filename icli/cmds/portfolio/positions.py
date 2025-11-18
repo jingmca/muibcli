@@ -465,7 +465,8 @@ class IOpPositions(IOp):
 
             if preset_cols is None:
                 # Full mode or auto with wide terminal - use default compact
-                compact_cols = ["type", "sym", "position", "avgCost", "mktPrice", "mktValue", "PNL", "%", "w%"]
+                # Put % and w% before PNL so the variable-width PNL column is last
+                compact_cols = ["type", "sym", "position", "avgCost", "mktPrice", "mktValue", "%", "w%", "PNL"]
             else:
                 # Use preset columns exactly as specified (don't add type)
                 # We'll use allPositions to detect options, not compact_df
