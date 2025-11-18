@@ -4919,9 +4919,15 @@ class IBKRCmdlineApp:
             else:
                 or30_range = "---"
 
-            # Format OR30 display with color
-            or30_color_code = {"green": "92", "red": "91", "yellow": "93", "white": "0"}[or30_color]
-            or30_display = f"[OR30:{or30_range} \033[{or30_color_code}m{or30_text}\033[0m]"
+            # Format OR30 display with color using prompt_toolkit HTML tags
+            or30_color_map = {
+                "green": "ansibrightgreen",
+                "red": "ansibrightred",
+                "yellow": "ansibrightyellow",
+                "white": "ansiwhite"
+            }
+            or30_style = or30_color_map[or30_color]
+            or30_display = f"[OR30:{or30_range} <aaa fg='{or30_style}'>{or30_text}</aaa>]"
 
             # for price differences we show the difference as if holding a LONG position
             # at the historical price as compared against the current price.
