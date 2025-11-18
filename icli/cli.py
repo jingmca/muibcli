@@ -954,6 +954,12 @@ class IBKRCmdlineApp:
         try:
             # logger.info("Looking up uncached contracts: {}", uncached_contracts)
 
+            # Ensure all contracts have an exchange set; default to SMART if not specified
+            # This provides a fallback routing for contracts that don't explicitly set an exchange
+            for (originalContractKey, contract) in uncached_contracts:
+                if not contract.exchange:
+                    contract.exchange = "SMART"
+
             # iterate requests in smaller blocks if we have a large input request
             CHUNK = 50
 
