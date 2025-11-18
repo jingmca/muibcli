@@ -4900,14 +4900,28 @@ class IBKRCmdlineApp:
                 atr = f"{atrval:>5.2f}"
 
             # Select EMA periods based on quote mode for stocks
-            # Compact: ≈ EMA8 and EMA21 on 15min bars
-            # Full: ≈ EMA21 and EMA50 on 1h bars
+            # Compact: VWAP + OR30
+            # Full: EMA5 + EMA21 (on 15min bars) + VWAP + OR30
             if display_config.quote_preset == "compact":
-                e100 = round(c.ema[7_200], decimals)    # ≈ EMA8 on 15min bars
+                # Compact mode doesn't display EMAs, only VWAP and OR30
+                e100 = e300 = None
+            else:  # full mode
+                e100 = round(c.ema[4_500], decimals)    # ≈ EMA5 on 15min bars
                 e300 = round(c.ema[18_900], decimals)   # ≈ EMA21 on 15min bars
-            else:  # full or other modes
-                e100 = round(c.ema[75_600], decimals)   # ≈ EMA21 on 1h bars
-                e300 = round(c.ema[180_000], decimals)  # ≈ EMA50 on 1h bars
+
+            # Get VWAP for both modes
+            vwap_value = round(c.vwap, decimals)
+
+            # Get OR30 status for both modes
+            or30_text, or30_color = c.or30_status()
+            if c.or30_high is not None and c.or30_low is not None:
+                or30_range = f"{c.or30_low:>10,.{decimals}f}-{c.or30_high:>10,.{decimals}f}"
+            else:
+                or30_range = "---"
+
+            # Format OR30 display with color
+            or30_color_code = {"green": "92", "red": "91", "yellow": "93", "white": "0"}[or30_color]
+            or30_display = f"[OR30:{or30_range} \033[{or30_color_code}m{or30_text}\033[0m]"
 
             # for price differences we show the difference as if holding a LONG position
             # at the historical price as compared against the current price.
@@ -4917,22 +4931,27 @@ class IBKRCmdlineApp:
             #      vs. current where "smaller historical vs. larger current" would cause negative
             #      difference which is actually a profit if it were LONG'd in the past)
             # also don't show differences for TICK because it's not really a useful number (and it's too big breaking formatting)
-            if ls == "TICK-NYSE":
-                e100diff = 0
-                e300diff = 0
-            else:
-                e100diff = (usePrice - e100) if e100 else 0
-                e300diff = (usePrice - e300) if e300 else 0
-            # logger.info("[{}] e100 e300: {} {} {} {}", ls, e100, e300, e100diff, e300diff)
+            # Only calculate EMA diffs and trend in full mode
+            if e100 is not None and e300 is not None:
+                if ls == "TICK-NYSE":
+                    e100diff = 0
+                    e300diff = 0
+                else:
+                    e100diff = (usePrice - e100) if e100 else 0
+                    e300diff = (usePrice - e300) if e300 else 0
 
-            # also add a marker for if the short term trend (15m) is GT, LT, or EQ to the longer term trend (65m)
-            ediff = e100 - e300
-            if ediff > 0:
-                trend = "&gt;"
-            elif ediff < 0:
-                trend = "&lt;"
+                # also add a marker for if the short term trend is GT, LT, or EQ to the longer term trend
+                ediff = e100 - e300
+                if ediff > 0:
+                    trend = "&gt;"
+                elif ediff < 0:
+                    trend = "&lt;"
+                else:
+                    trend = "="
             else:
-                trend = "="
+                # Compact mode: no EMA diff or trend
+                e100diff = e300diff = 0
+                trend = ""
 
             # fmt: off
             # Use display_config to determine which fields to show for stocks/ETFs
@@ -4962,13 +4981,13 @@ class IBKRCmdlineApp:
                 if has_position:
                     fields.append(pos_display)
             elif quote_mode in ["compact", "scalping"]:
-                # Compact: sym, ema100, trend, price±spread, bid/ask+size, [position]
+                # Compact: sym, price±spread, bid/ask+size, VWAP, OR30, [position]
                 fields = [
                     f"{ls:<9}",
-                    f"{e100:>10,.{decimals}f}",
-                    f"{trend}",
                     f"{usePrice:>10,.{decimals}f} ±{spread_display:<6}",
                     f"<aaa bg='purple'>{bid_display} {ask_display}</aaa>",
+                    f"VWAP:{vwap_value:>10,.{decimals}f}",
+                    or30_display,
                 ]
                 if has_position:
                     fields.append(pos_display)
@@ -4999,24 +5018,17 @@ class IBKRCmdlineApp:
                 if has_position:
                     fields.append(pos_display)
             else:  # full or default
-                # Full: all fields (original display) + [position]
+                # Full: EMA5, EMA21 (15min), VWAP, OR30 + [position]
                 fields = [
                     f"{ls:<9}",
-                    f"{e100:>10,.{decimals}f}",
-                    f"({e100diff:>6,.2f})" if e100diff else "(      )",
+                    f"EMA5:{e100:>10,.{decimals}f}" if e100 else "EMA5:---",
                     f"{trend}",
-                    f"{e300:>10,.{decimals}f}",
-                    f"({e300diff:>6,.2f})" if e300diff else "(      )",
+                    f"EMA21:{e300:>10,.{decimals}f}" if e300 else "EMA21:---",
                     f"{usePrice:>10,.{decimals}f} ±{spread_display:<6}",
-                    f"{high or np.nan:>10,.{decimals}f}",
-                    f"{low or np.nan:>10,.{decimals}f}",
                     f"<aaa bg='purple'>{bid_display} {ask_display}</aaa>",
-                    f"({atr})",
-                    f"({pctVWAP} {amtVWAPColor})",
-                    f"{close or np.nan:>10,.{decimals}f}",
-                    f"({ago:>7})",
-                    f"@ ({agoLastTrade})" if agoLastTrade else "",
-                    "     HALTED!" if c.halted else "",
+                    f"VWAP:{vwap_value:>10,.{decimals}f}",
+                    or30_display,
+                    "HALTED!" if c.halted else "",
                 ]
                 if has_position:
                     fields.append(pos_display)

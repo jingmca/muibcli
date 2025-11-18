@@ -405,6 +405,7 @@ class TWEMA:
     # EMA durations in seconds
     # 3,900 seconds is 65 minutes; 23_400 seconds is 6.5 hours (390 minutes)
     # Added longer periods for trend analysis:
+    # 4,500 = 75min (≈ EMA5 on 15min bars)
     # 7,200 = 2h (≈ EMA8 on 15min bars)
     # 18,900 = 5.25h (≈ EMA21 on 15min bars)
     # 75,600 = 21h (≈ EMA21 on 1h bars)
@@ -420,6 +421,7 @@ class TWEMA:
         900,
         1800,
         3_900,
+        4_500,      # 75 minutes (≈ EMA5 on 15min bars)
         7_200,      # 2 hours (≈ EMA8 on 15min bars)
         18_900,     # 5.25 hours (≈ EMA21 on 15min bars)
         75_600,     # 21 hours (≈ EMA21 on 1h bars)
@@ -821,6 +823,11 @@ class ITicker:
     alertDelta: float = 0.0
     alertIV: float = 0.0
 
+    # OR30 (Opening Range 30) tracking
+    or30_high: float | None = None  # High in first 30min (9:30-10:00 ET)
+    or30_low: float | None = None   # Low in first 30min (9:30-10:00 ET)
+    or30_locked: bool = False       # True after 10:00 ET, prevents further updates
+
     # 'levels' map from a bar duration (2 minute, 5 minute, 30 minute, 1 hour, 1 day, 1 week) to the level records holder
     levels: dict[int, LevelBreacher] = field(default_factory=dict)
 
@@ -923,6 +930,29 @@ class ITicker:
     def current(self) -> float | None:
         return self.quote().current
 
+    def or30_status(self) -> tuple[str, str]:
+        """Check OR30 breakout status.
+
+        Returns:
+            (status_text, color) where:
+            - status_text: e.g., "↑突破", "区间内", "↓突破"
+            - color: "green", "white", "red"
+        """
+        if not self.or30_locked or self.or30_high is None or self.or30_low is None:
+            return ("OR30收集中", "yellow")
+
+        current = self.current
+        if current is None:
+            return ("--", "white")
+
+        # Check breakout status
+        if current > self.or30_high:
+            return ("↑突破", "green")
+        elif current < self.or30_low:
+            return ("↓突破", "red")
+        else:
+            return ("区间内", "white")
+
     def processTickerUpdate(self) -> None:
         """Update data for this ticker and any dependent tickers when we received new data."""
 
@@ -990,6 +1020,30 @@ class ITicker:
         ts = self.ticker.timestamp
         assert ts
         self.ema.update(current, ts)
+
+        # Update OR30 (Opening Range 30) if within first 30 minutes of market open
+        # Market opens at 9:30 ET, OR30 locks at 10:00 ET
+        if not self.or30_locked:
+            from datetime import datetime
+            import zoneinfo
+
+            # Get current time in ET
+            et_tz = zoneinfo.ZoneInfo("America/New_York")
+            now_et = datetime.fromtimestamp(ts, tz=et_tz)
+
+            # Check if we're in OR30 window (9:30-10:00 ET)
+            market_open_time = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+            or30_end_time = now_et.replace(hour=10, minute=0, second=0, microsecond=0)
+
+            if market_open_time <= now_et < or30_end_time:
+                # Update OR30 high/low during first 30 minutes
+                if self.or30_high is None or current > self.or30_high:
+                    self.or30_high = current
+                if self.or30_low is None or current < self.or30_low:
+                    self.or30_low = current
+            elif now_et >= or30_end_time:
+                # Lock OR30 after 10:00 ET
+                self.or30_locked = True
 
         name = self.ticker.contract.symbol  # type: ignore
         if isinstance(self.ticker.contract, Future):
