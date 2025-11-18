@@ -71,7 +71,7 @@ class DisplayConfig:
 
     # Quote settings
     quote_columns: list[str] | None = None
-    quote_preset: str = "compact"
+    quote_preset: str = "full"  # Changed default from "compact" to "full"
     quote_show_greeks: bool = True
 
     # Global settings
