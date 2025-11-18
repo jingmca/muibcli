@@ -404,6 +404,11 @@ class TWEMA:
 
     # EMA durations in seconds
     # 3,900 seconds is 65 minutes; 23_400 seconds is 6.5 hours (390 minutes)
+    # Added longer periods for trend analysis:
+    # 7,200 = 2h (≈ EMA8 on 15min bars)
+    # 18,900 = 5.25h (≈ EMA21 on 15min bars)
+    # 75,600 = 21h (≈ EMA21 on 1h bars)
+    # 180,000 = 50h (≈ EMA50 on 1h bars)
     durations: tuple[int, ...] = (
         0,  # we use '0' to mean "last value seen"
         15,
@@ -415,6 +420,10 @@ class TWEMA:
         900,
         1800,
         3_900,
+        7_200,      # 2 hours (≈ EMA8 on 15min bars)
+        18_900,     # 5.25 hours (≈ EMA21 on 15min bars)
+        75_600,     # 21 hours (≈ EMA21 on 1h bars)
+        180_000,    # 50 hours (≈ EMA50 on 1h bars)
         RTH_EMA_VWAP,
     )
 

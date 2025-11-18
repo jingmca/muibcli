@@ -4899,8 +4899,15 @@ class IBKRCmdlineApp:
                 # else, we can print a full width value since it will fit in the 5 character width column
                 atr = f"{atrval:>5.2f}"
 
-            e100 = round(c.ema[900], decimals)
-            e300 = round(c.ema[3_900], decimals)
+            # Select EMA periods based on quote mode for stocks
+            # Compact: ≈ EMA8 and EMA21 on 15min bars
+            # Full: ≈ EMA21 and EMA50 on 1h bars
+            if display_config.quote_preset == "compact":
+                e100 = round(c.ema[7_200], decimals)    # ≈ EMA8 on 15min bars
+                e300 = round(c.ema[18_900], decimals)   # ≈ EMA21 on 15min bars
+            else:  # full or other modes
+                e100 = round(c.ema[75_600], decimals)   # ≈ EMA21 on 1h bars
+                e300 = round(c.ema[180_000], decimals)  # ≈ EMA50 on 1h bars
 
             # for price differences we show the difference as if holding a LONG position
             # at the historical price as compared against the current price.
