@@ -45,7 +45,14 @@ import icli.orders as orders
 
 from . import instrumentdb, utils
 
-locale.setlocale(locale.LC_ALL, "")
+# Try to set locale to system default, fallback to C locale if unavailable
+try:
+    locale.setlocale(locale.LC_ALL, "")
+except locale.Error:
+    try:
+        locale.setlocale(locale.LC_ALL, "C.UTF-8")
+    except locale.Error:
+        locale.setlocale(locale.LC_ALL, "C")
 
 import ib_async
 import prettyprinter as pp  # type: ignore
