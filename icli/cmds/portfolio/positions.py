@@ -102,7 +102,8 @@ class IOpPositions(IOp):
 
         # don't do total maths unless totals actually exist
         # (e.g. if you have no open positions, this math obviously can't work)
-        if t.all():
+        # Also check that the denominator won't be zero
+        if t.all() and (t.marketValue + t.totalCost) != 0:
             df.loc["Total", "%"] = (
                 (t.marketValue - t.totalCost) / ((t.marketValue + t.totalCost) / 2)
             ) * 100
@@ -294,7 +295,9 @@ class IOpPositions(IOp):
             make["closeOrder"] = closingSide
             make["marketValue"] = o.marketValue
             make["totalCost"] = o.averageCost * o.position
-            make["unrealizedPNLPer"] = o.unrealizedPNL / abs(o.position)
+            make["unrealizedPNLPer"] = (
+                o.unrealizedPNL / abs(o.position) if o.position != 0 else 0
+            )
             make["unrealizedPNL"] = o.unrealizedPNL
 
             try:
@@ -328,6 +331,8 @@ class IOpPositions(IOp):
                 make["averageCost"] = round(o.averageCost / multiplier, digits + 1)
                 make["%"] = (
                     (o.marketPrice * multiplier - o.averageCost) / o.averageCost * 100
+                    if o.averageCost != 0
+                    else 0
                 )
             elif t == "BAG":
                 logger.info("available: {}", o)
@@ -337,6 +342,8 @@ class IOpPositions(IOp):
                 # the total cost per contract. shrug.
                 make["%"] = (
                     (o.marketPrice * multiplier - o.averageCost) / o.averageCost * 100
+                    if o.averageCost != 0
+                    else 0
                 )
 
                 # show average cost per share instead of per contract
@@ -344,7 +351,11 @@ class IOpPositions(IOp):
                 # per share, not per contract.
                 make["averageCost"] = round(o.averageCost / multiplier, digits + 1)
             else:
-                make["%"] = (o.marketPrice - o.averageCost) / o.averageCost * 100
+                make["%"] = (
+                    (o.marketPrice - o.averageCost) / o.averageCost * 100
+                    if o.averageCost != 0
+                    else 0
+                )
                 make["averageCost"] = round(o.averageCost, digits + 1)
 
             # if short, our profit percentage is reversed
