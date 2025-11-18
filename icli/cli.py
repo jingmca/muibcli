@@ -995,9 +995,18 @@ class IBKRCmdlineApp:
                 str(e),
             )
 
-        assert (
-            len(got) == len(uncached_contracts)
-        ), f"We can't continue caching if we didn't lookup all the contracts! {len(got)=} vs {len(uncached_contracts)=}"
+        # If qualification failed (timeout during nightly maintenance, etc), fill missing contracts
+        # with their original unqualified versions so we can attempt to continue
+        if len(got) != len(uncached_contracts):
+            logger.warning(
+                "Qualification incomplete: got {} contracts but expected {}. Using unqualified contracts for missing entries.",
+                len(got),
+                len(uncached_contracts),
+            )
+            # Fill in missing contracts with original unqualified versions
+            for i in range(len(got), len(uncached_contracts)):
+                (_, original_contract) = uncached_contracts[i]
+                got.append(original_contract)
 
         # iterate resolved contracts and cache them by multiple lookup keys
         for (originalContractKey, requestContract), contract in zip(
