@@ -5025,16 +5025,17 @@ class IBKRCmdlineApp:
                 if has_position:
                     fields.append(pos_display)
             else:  # full or default
-                # Full: EMA5, EMA21 (15min), VWAP, OR30 + [position]
-                # Compact format without labels
+                # Full: EMA5, EMA21, price, high/low/close, VWAP, OR30 + [position]
+                # Compact format: tighter spacing, add intraday levels
                 fields = [
                     f"{ls:<9}",
-                    f"{e100:>10,.{decimals}f}" if e100 else "---",
-                    f"{trend}",
-                    f"{e300:>10,.{decimals}f}" if e300 else "---",
-                    f"{usePrice:>10,.{decimals}f} ±{spread_display:<6}",
+                    f"{e100:>7,.{decimals}f}{trend}{e300:>7,.{decimals}f}" if e100 else f"---{trend}---",
+                    f"{usePrice:>10,.{decimals}f}±{spread_display:<5}",
                     f"<aaa bg='purple'>{bid_display} {ask_display}</aaa>",
-                    f"{vwap_value:>10,.{decimals}f}",
+                    f"H:{high or np.nan:>7,.{decimals}f}",
+                    f"L:{low or np.nan:>7,.{decimals}f}",
+                    f"C:{close or np.nan:>7,.{decimals}f}",
+                    f"{vwap_value:>7,.{decimals}f}",
                     or30_display,
                     "HALTED!" if c.halted else "",
                 ]
