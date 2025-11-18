@@ -13,10 +13,10 @@ from typing import Literal
 # ========== Position Display Presets ==========
 
 POSITION_PRESETS = {
-    "minimal": ["sym", "position", "avgCost", "mktPrice", "PNL", "%"],
-    "compact": ["sym", "position", "avgCost", "mktPrice", "mktValue", "PNL", "%", "w%"],
-    "trading": ["sym", "position", "avgCost", "mktPrice", "closeOrder", "PNL", "dailyPNL", "%", "w%"],
-    "analysis": ["sym", "position", "marketValue", "totalCost", "unrealizedPNL", "dailyPNL", "%", "w%"],
+    "minimal": ["sym", "position", "avgCost", "mktPrice", "%", "PNL"],
+    "compact": ["sym", "position", "avgCost", "mktPrice", "mktValue", "%", "w%", "PNL"],
+    "trading": ["sym", "position", "avgCost", "mktPrice", "closeOrder", "%", "w%", "dailyPNL", "PNL"],
+    "analysis": ["sym", "position", "marketValue", "totalCost", "%", "w%", "dailyPNL", "unrealizedPNL"],
     "full": None,  # None means show all columns
 }
 
