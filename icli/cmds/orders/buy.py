@@ -172,6 +172,17 @@ class IOpOrder(IOp):
 
         assert cmd, "Why didn't you provide a buy specification to run?"
 
+        # Preprocess: convert percentage-of-buying-power syntax to calculation expression
+        # e.g., "10%BP" -> "(* :BP 0.1)", "25%BP3" -> "(* :BP3 0.25)"
+        import re
+        bp_pattern = r'(\d+(?:\.\d+)?)%BP(\d?)'
+        def replace_bp_percentage(match):
+            pct = float(match.group(1)) / 100
+            bp_var = f":BP{match.group(2)}" if match.group(2) else ":BP"
+            return f"(* {bp_var} {pct})"
+
+        cmd = re.sub(bp_pattern, replace_bp_percentage, cmd)
+
         # parse the entire input string to this command through the requestlang/orderlang parser
         request = self.state.requestlang.parse(cmd)
         logger.info("[{}] Requesting: {}", cmd, request)

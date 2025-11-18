@@ -33,19 +33,35 @@ class IOpPositionEvict(IOp):
     """
 
     sym: str = field(init=False)
-    qty: float = field(init=False)
+    qty: float | str = field(init=False)  # Can be float or percentage string like "50%"
     delta: float = field(init=False)
     algo: str | None = field(init=False)
+
+    def _parse_qty(self, qty_str: str) -> float | str:
+        """Parse quantity parameter - can be number or percentage"""
+        qty_str = str(qty_str).strip()
+
+        # Check if it's a percentage
+        if qty_str.endswith('%'):
+            try:
+                pct = float(qty_str[:-1])
+                if 0 < pct <= 100:
+                    return qty_str  # Return as string to preserve percentage marker
+            except ValueError:
+                pass
+
+        # Otherwise parse as regular number
+        return float(qty_str)
 
     def argmap(self):
         return [
             DArg("sym"),
             DArg(
                 "qty",
-                convert=float,
-                verify=lambda x: x != 0 and x >= -1,
+                convert=self._parse_qty,
+                verify=lambda x: (isinstance(x, str) and x.endswith('%')) or (isinstance(x, (int, float)) and x != 0 and x >= -1),
                 default=-1,
-                desc="qty is the exact quantity to evict (or -1 to evict entire position)",
+                desc="qty is the exact quantity to evict, -1 for entire position, or percentage like '50%' to evict that portion",
             ),
             DArg(
                 "delta",
@@ -61,8 +77,34 @@ class IOpPositionEvict(IOp):
         ]
 
     async def run(self):
+        # Handle percentage-based eviction
+        qty_to_evict = self.qty
+        if isinstance(self.qty, str) and self.qty.endswith('%'):
+            # Extract percentage value
+            pct = float(self.qty[:-1]) / 100
+
+            # Get current positions to calculate actual quantity
+            # First, get all contracts matching the symbol
+            all_contracts = self.state.contractsForPosition(self.sym, None)
+
+            if not all_contracts:
+                logger.error("No positions found for: {}", self.sym)
+                return None
+
+            # Calculate total position quantity
+            total_qty = sum(abs(qty) for _, qty, _ in all_contracts)
+
+            # Calculate quantity to evict based on percentage
+            qty_to_evict = total_qty * pct
+
+            logger.info(
+                "Evicting {}% of {} (total position: {}, evicting: {:.2f})",
+                self.qty[:-1], self.sym, total_qty, qty_to_evict
+            )
+
+        # Get contracts to evict with calculated quantity
         contracts = self.state.contractsForPosition(
-            self.sym, None if self.qty == -1 else self.qty
+            self.sym, None if qty_to_evict == -1 else qty_to_evict
         )
 
         if not contracts:
