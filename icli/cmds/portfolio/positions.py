@@ -40,42 +40,43 @@ class IOpPositions(IOp):
     def _format_pnl_with_color(self, value: float) -> str:
         """Format PNL value with color coding using ANSI escape codes.
 
-        Green for profit (positive), Red for loss (negative), Gray for zero.
-        Let pandas handle alignment, just add colors.
+        Green background for profit, red background for loss.
+        Since PNL column is now the last column, we can use background colors
+        without affecting alignment of other columns.
         """
-        # Format number without fixed width - let pandas handle column alignment
-        formatted = f"{value:,.2f}"
+        # Format number with compact width
+        formatted = f"{value:,.0f}"  # No decimal places for more compact display
 
-        # ANSI color codes - all combinations have same total length for alignment
-        # Using \033[22m (not bold, 5 bytes) same length as \033[01m (bold, 5 bytes)
-        BOLD = '\033[01m'          # Padded with 0 to match length
-        NORMAL_WEIGHT = '\033[22m'  # Already 5 bytes
-        GREEN = '\033[32m'
-        RED = '\033[31m'
-        GRAY = '\033[90m'
-        BRIGHT_GREEN = '\033[92m'
-        BRIGHT_RED = '\033[91m'
+        # ANSI color codes with background colors
+        # Format: \033[FG;BGm where FG=foreground, BG=background
+        # Backgrounds: 40-47 (dark), 100-107 (bright)
         RESET = '\033[0m'
 
         if value > 0:
-            # Profit: green color with bold for larger amounts
+            # Profit: green backgrounds with black text
             if value > 10000:
-                return f"{BOLD}{BRIGHT_GREEN}{formatted}{RESET}"       # Bold bright green
+                # Bright green background, black text
+                return f"\033[30;102m{formatted}{RESET}"
             elif value > 1000:
-                return f"{BOLD}{GREEN}{formatted}{RESET}"              # Bold green
+                # Green background, black text
+                return f"\033[30;42m{formatted}{RESET}"
             else:
-                return f"{NORMAL_WEIGHT}{GREEN}{formatted}{RESET}"     # Normal green (same code length)
+                # Light green foreground only for small profits
+                return f"\033[92m{formatted}{RESET}"
         elif value < 0:
-            # Loss: red color with bold for larger amounts
+            # Loss: red backgrounds with white text
             if value < -10000:
-                return f"{BOLD}{BRIGHT_RED}{formatted}{RESET}"         # Bold bright red
+                # Bright red background, white text
+                return f"\033[97;101m{formatted}{RESET}"
             elif value < -1000:
-                return f"{BOLD}{RED}{formatted}{RESET}"                # Bold red
+                # Red background, white text
+                return f"\033[97;41m{formatted}{RESET}"
             else:
-                return f"{NORMAL_WEIGHT}{RED}{formatted}{RESET}"       # Normal red (same code length)
+                # Light red foreground only for small losses
+                return f"\033[91m{formatted}{RESET}"
         else:
-            # Zero or very small: gray
-            return f"{NORMAL_WEIGHT}{GRAY}{formatted}{RESET}"
+            # Zero: gray
+            return f"\033[90m{formatted}{RESET}"
 
     def totalFrame(self, df, costPrice=False):
         if df.empty:
