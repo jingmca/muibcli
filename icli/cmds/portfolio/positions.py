@@ -38,41 +38,33 @@ class IOpPositions(IOp):
         return [DArg("*symbols", convert=lambda x: set([sym.upper() for sym in x]))]
 
     def _format_pnl_with_color(self, value: float) -> str:
-        """Format PNL value with color coding using ANSI escape codes.
+        """Format PNL value with color coding using ANSI foreground colors only.
 
-        Green background for profit, red background for loss.
-        Let pandas handle alignment - just color the number itself.
+        Green for profit, red for loss. Intensity varies by magnitude.
+        Pandas handles alignment automatically.
         """
         # Format number with thousand separators
         num_str = f"{value:,.0f}"
 
-        # ANSI color codes
-        # Format: \033[FG;BGm where FG=foreground, BG=background
-        # Backgrounds: 40-47 (dark), 100-107 (bright)
+        # ANSI foreground color codes only
         RESET = '\033[0m'
 
         if value > 0:
-            # Profit: green backgrounds with black text for large gains
+            # Profit: green shades
             if value > 10000:
-                # Bright green background, black text
-                return f"\033[30;102m{num_str}{RESET}"
+                return f"\033[92m{num_str}{RESET}"  # Bright green
             elif value > 1000:
-                # Green background, black text
-                return f"\033[30;42m{num_str}{RESET}"
+                return f"\033[32m{num_str}{RESET}"  # Green
             else:
-                # Light green foreground only for small profits
-                return f"\033[92m{num_str}{RESET}"
+                return f"\033[92m{num_str}{RESET}"  # Bright green
         elif value < 0:
-            # Loss: red backgrounds with white text for large losses
+            # Loss: red shades
             if value < -10000:
-                # Bright red background, white text
-                return f"\033[97;101m{num_str}{RESET}"
+                return f"\033[91m{num_str}{RESET}"  # Bright red
             elif value < -1000:
-                # Red background, white text
-                return f"\033[97;41m{num_str}{RESET}"
+                return f"\033[31m{num_str}{RESET}"  # Red
             else:
-                # Light red foreground only for small losses
-                return f"\033[91m{num_str}{RESET}"
+                return f"\033[91m{num_str}{RESET}"  # Bright red
         else:
             # Zero: gray
             return f"\033[90m{num_str}{RESET}"
