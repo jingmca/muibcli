@@ -44,8 +44,9 @@ class IOpPositions(IOp):
         Since PNL column is now the last column, we can use background colors
         without affecting alignment of other columns.
         """
-        # Format number with compact width
-        formatted = f"{value:,.0f}"  # No decimal places for more compact display
+        # Format number with right alignment (8 chars width for consistency)
+        # This ensures all numbers align properly regardless of ANSI codes
+        formatted = f"{value:>8,.0f}"  # Right-aligned, 8 chars width
 
         # ANSI color codes with background colors
         # Format: \033[FG;BGm where FG=foreground, BG=background
