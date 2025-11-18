@@ -117,6 +117,19 @@ class IOpPositions(IOp):
             df["w%"] = 0
             df.loc["Total", "w%"] = 0
 
+        # Reorder columns to place w% right after % (before PNL columns)
+        if "w%" in df.columns and "%" in df.columns:
+            # Get column list
+            cols = list(df.columns)
+            # Remove w% from its current position
+            cols.remove("w%")
+            # Find position of % column
+            pct_idx = cols.index("%")
+            # Insert w% right after %
+            cols.insert(pct_idx + 1, "w%")
+            # Reorder dataframe
+            df = df[cols]
+
         # give actual price columns more detail for sub-penny prices
         # but give aggregate columns just two decimal precision
         detailCols = [
@@ -386,10 +399,10 @@ class IOpPositions(IOp):
                 "closeOrderProfit",
                 "marketValue",
                 "totalCost",
+                "%",  # Place % before PNL columns for better readability
                 "unrealizedPNLPer",
                 "unrealizedPNL",
                 "dailyPNL",
-                "%",
             ],
         )
 
