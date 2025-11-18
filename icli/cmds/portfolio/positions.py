@@ -41,44 +41,41 @@ class IOpPositions(IOp):
         """Format PNL value with color coding using ANSI escape codes.
 
         Green background for profit, red background for loss.
-        Since PNL column is now the last column, we can use background colors
-        without affecting alignment of other columns.
+        Let pandas handle alignment - just color the number itself.
         """
-        # Format number with right alignment (10 chars width for consistency)
-        # This ensures all numbers align properly regardless of ANSI codes
-        # Width 10 handles values up to ±9,999,999 with commas
-        formatted = f"{value:>10,.0f}"  # Right-aligned, 10 chars width
+        # Format number with thousand separators
+        num_str = f"{value:,.0f}"
 
-        # ANSI color codes with background colors
+        # ANSI color codes
         # Format: \033[FG;BGm where FG=foreground, BG=background
         # Backgrounds: 40-47 (dark), 100-107 (bright)
         RESET = '\033[0m'
 
         if value > 0:
-            # Profit: green backgrounds with black text
+            # Profit: green backgrounds with black text for large gains
             if value > 10000:
                 # Bright green background, black text
-                return f"\033[30;102m{formatted}{RESET}"
+                return f"\033[30;102m{num_str}{RESET}"
             elif value > 1000:
                 # Green background, black text
-                return f"\033[30;42m{formatted}{RESET}"
+                return f"\033[30;42m{num_str}{RESET}"
             else:
                 # Light green foreground only for small profits
-                return f"\033[92m{formatted}{RESET}"
+                return f"\033[92m{num_str}{RESET}"
         elif value < 0:
-            # Loss: red backgrounds with white text
+            # Loss: red backgrounds with white text for large losses
             if value < -10000:
                 # Bright red background, white text
-                return f"\033[97;101m{formatted}{RESET}"
+                return f"\033[97;101m{num_str}{RESET}"
             elif value < -1000:
                 # Red background, white text
-                return f"\033[97;41m{formatted}{RESET}"
+                return f"\033[97;41m{num_str}{RESET}"
             else:
                 # Light red foreground only for small losses
-                return f"\033[91m{formatted}{RESET}"
+                return f"\033[91m{num_str}{RESET}"
         else:
             # Zero: gray
-            return f"\033[90m{formatted}{RESET}"
+            return f"\033[90m{num_str}{RESET}"
 
     def totalFrame(self, df, costPrice=False):
         if df.empty:
